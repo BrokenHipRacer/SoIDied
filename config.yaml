@@ -1,0 +1,51 @@
+# Project Settings
+
+# Niceties
+app:
+  name: SoIDied
+  description: A post-mortem information release service, designed to share important details after my death or missed check-ins. It operates silently in the background, ensuring that my loved(?) one(s) receive the necessary information when they need it most.
+  version: 0.0.1
+
+# Service Settings
+settings:
+  log_level: INFO
+  debug: false
+  dark_mode: true
+
+email:
+  provider: AmazonSES
+  alert_email: blank@blank.blank # where to send alerts to
+
+actions:
+  # actions to perform on death
+  send_email: true # if true, the system will send an email with the provided information.
+  delete_data: true # if true, the system will attempt to delete all data after death. Use with caution.
+  social_media: false # if true, the system will post a message on social media accounts. Use with caution.
+  custom_script: false # if true, the system will execute a custom script. Use with caution.
+  echo_count: 2 # numbers of time to send end of life messages to send before deleting data.
+
+defences:
+  # how far are we taking this?
+  crash_and_burn: true # if true, the system will attempt to delete itself after death. Use with caution.
+  unlock: false # if true, the system can be unlocked with a password and new data added. Use with caution.
+  canary: false # if true, the system will send a canary message to alert service is alive.
+  miss_count: 1 # number of missed check-ins before triggering death sequence
+  miss_alert: false # if true, the system will send an alert after a missed check-in before triggering death sequence. Use with caution.
+
+  # check-in settings
+  check_in_interval: d # M:months W:weeks d:days h:hours m:minutes
+  check_in_window: 7 # egg timer for check-in. If the user doesn't check in within this window, it will be considered a missed check-in.
+  check_in_timeout_count: 5 # number of extra check-in attempts before triggering panic mode
+  check_in_over_attempts: 3 # attempts before triggering panic mode
+
+  # panic settings
+  panic_threshold: 3 # attempts before triggering panic mode
+  panic_timeframe: 5 # minutes before triggering panic mode between over attempts
+  panic_mode: lockdown # options: permanent, lockdown, alert, ignore
+    ## permanent: the system will lock down and prevent any further access and will need the service Hard Killed to prevent death sequence. Use with caution.
+    ## lockdown: the system will lock down and prevent any further access until released. Use with caution.
+    ## alert: the system will send an alert to the provided email address.
+    ## ignore: the system will ignore the attempts and continue as normal.
+  panic_to_sniffing: true # if true, the system will attempt to detect if the user is trying to bypass the system. Use with caution.
+  panic_to_death: true # if true, the system will trigger the death sequence after panic mode is triggered. Use with caution.
+  panic_to_death_timeframe: 1200 # minutes before triggering death sequence after panic mode is triggered. Use with caution.
