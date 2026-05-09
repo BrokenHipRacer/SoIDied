@@ -8,14 +8,14 @@ class Settings:
 
     def __init__(self, config_path: str = 'config.yaml'):
         """
-        Initialize Settings by loading configuration from YAML file.
+        Initialize Settings by loading configuration from a YAML file.
 
         Args:
             config_path: Path to the config.yaml file (relative or absolute)
 
         Raises:
-            FileNotFoundError: If config file does not exist
-            yaml.YAMLError: If config file is invalid YAML
+            FileNotFoundError: If a config file does not exist,
+            yaml.YAMLError: If a config file is invalid YAML
         """
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
@@ -27,11 +27,11 @@ class Settings:
 
     def get(self, key: str, default: Optional[Any] = None) -> Any:
         """
-        Get a top-level configuration key with optional default value.
+        Get a top-level configuration key with an optional default value.
 
         Args:
             key: Configuration key to retrieve
-            default: Default value if key not found
+            default: Default value if key is not found
 
         Returns:
             Configuration value or default
@@ -65,7 +65,7 @@ class Settings:
         return self._config[key]
 
     def __contains__(self, key: str) -> bool:
-        """Check if key exists in config: 'app' in settings"""
+        """Check if a key exists in config: 'app' in settings"""
         return key in self._config
 
     @property

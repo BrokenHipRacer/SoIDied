@@ -1,14 +1,17 @@
-# SoIDied - Digital Dead Man's Switch
+# SoIDied – Digital Dead Man's Switch
 
 A post-mortem digital notification system that monitors user check-ins and automatically sends pre-configured information to contacts when the user dies or misses scheduled check-ins.
 
+If feeling generous, consider donating to support development: [Buy me a coffee](https://buymeacoffee.com/brokenhipracer)
+
+
 ## ⚠️ Important Warning
 
-This system handles sensitive post-mortem notifications and data deletion. **Use with extreme caution** - misconfiguration could result in unintended data loss or premature notifications.
+This system handles sensitive post-mortem notifications and data deletion. **Use with extreme caution** – misconfiguration could result in unintended data loss or premature notifications.
 
 ## Features
 
-- **Configuration-Driven**: Entirely controlled via YAML configuration - no hardcoded values
+- **Configuration-Driven**: Entirely controlled via YAML configuration – no hardcoded values
 - **Check-in Monitoring**: Tracks user check-ins with configurable intervals and thresholds
 - **Multi-Provider Email**: Support for Amazon SES, SendGrid, Mailgun, and Gmail
 - **Dark Mode Operation**: Suppresses API responses, rotates endpoints, and writes startup files for stealth operation
@@ -38,7 +41,7 @@ This system handles sensitive post-mortem notifications and data deletion. **Use
    cd SoIDied
    ```
 
-2. **Set up virtual environment**
+2. **Set up a virtual environment**
    ```bash
    # Windows
    python -m venv venv
@@ -63,7 +66,7 @@ This system handles sensitive post-mortem notifications and data deletion. **Use
      version: 0.0.1
 
    email:
-     provider: AmazonSES  # Choose: AmazonSES, SendGrid, Mailgun, Googlemail
+     provider: AmazonSES  # Choose: AmazonSES, SendGrid, Mailgun, Google email
      alert_email: your-email@example.com
 
    # ... configure other settings
@@ -91,7 +94,7 @@ The system is entirely configuration-driven. See `config.yaml` for all available
 - **`settings`**: Service configuration
   - `log_level`: Logging verbosity (DEBUG, INFO, WARNING, ERROR, CRITICAL)
   - `debug`: Extra logging and testing features (use with caution)
-  - `dark_mode`: Suppresses API responses, rotates endpoints, writes startup file (use with caution)
+  - `dark_mode`: Suppresses API responses, changes endpoints (use with caution)
 - **`email`**: Email provider configuration
 - **`actions`**: Death sequence behaviors
 - **`defences`**: Safety mechanisms and thresholds
@@ -169,7 +172,7 @@ Run `python api.py` to start the development server on `localhost:5000`.
 See [`AGENTS.md`](AGENTS.md) for detailed development guidelines, code patterns, and integration points.
 
 ### Code Conventions
-- **Configuration-driven**: Never hardcode values - use the Settings class
+- **Configuration-driven**: Never hardcode values – use the Settings class
 - **Safe defaults**: Graceful degradation for missing config keys
 - **Database context**: Always use `app.app_context()` for database operations
 
@@ -200,7 +203,7 @@ See [LICENSE](LICENSE) file.
 
 ## Status
 
-**Early Development** - File structure established, core components pending implementation:
+**Early Development** – File structure established, core components pending implementation:
 
 - [x] Project structure with modular directories (`src/api/`, `src/models/`, `src/db/`, `src/tools/`)
 - [x] Settings management class (`src/tools/settings.py`)
