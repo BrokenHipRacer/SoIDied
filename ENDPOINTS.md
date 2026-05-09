@@ -20,6 +20,7 @@
       - `id`: The ID of the user making the request.
       - `token`: The authentication token for the user.
   - **RESPONSE**:
+    - `http code`
     - JSON array of users. Each user has:
       - `id`: Unique identifier for the user.
       - `name`: The name of the user.
@@ -33,63 +34,215 @@
       - `token`: The authentication token for the user.
       - `name`: The name of the user to add.
       - `email`: The canary email address of the user to add.
-  **RESPONSE**:
-    - JSON array of users. Each user has:
+  - **RESPONSE**:
+    - `http code`
+    - JSON of user has:
       - `id`: Unique identifier for the user.
       - `name`: The name of the user.
       - `email`: The canary email address of the user.  **ONLY IF IN DEBUG MODE**
     
+
 - `/api/v1/users/remove`: Remove user from the database. #Will remove an ID if present, but you are compromised. Panic after the second use of any removed user, nothing will happen with any requests.
+  - **PUT**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user making the request.
+      - `token`: The authentication token for the user.
+      - `name`: The name of the user to add.
+      - `email`: The canary email address of the user to add.
+  - **RESPONSE**:
+    - `http code`
+    
+
 - `/api/v1/users/list`: List all users in the database. #Will list but you are compromised.
+  - **GET**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user making the request.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code`
+    - JSON array of users. Each user has:
+      - `id`: Unique identifier for the user.
+      - `name`: The name of the user.
+      - `email`: The canary email address of the user.  **ONLY IF IN DEBUG MODE**
 
 ### Check-in:
 - `/api/v1/checkin`: Register a check-in for a user. Only main will internally count as real, non-main user will register, but you are compromised.
-  - **POST**:
-    - `id`: The ID of the user to check in.
-    - `token`: The authentication token for the user.
+  - **PUT**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user making the request.
+      - `token`: The authentication token for the user.
   - **RESPONSE**:
-    - `http code` : 200 "success" if check-in is successful, "failure" otherwise.
+    - `http code`
     - `message` : "Next required Check-In by: [timestamp]"
 
 
 - `/api/v1/checkin/status`: Get the current check-in status of a user. #Will return status but you are compromised.
-    - **GET**:
-        - `id`: The ID of the user to check status for.
-        - `token`: The authentication token for the user.
-    - **RESPONSE**:
-        - `http code` : 200 "success" if status retrieval is successful, "failure" otherwise.
-        - `Status` : "OK" if user is in good standing, "ALERT" if user has missed check-ins, "DEAD" if user has reached the missed count threshold.
+  - **GET**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code`
+    - `Status` : "OK" if user is in good standing, "ALERT" if user has missed check-ins, "DEAD" if user has reached the missed count threshold.
 
 ### Messages:
 - `/api/v1/messages`: list all messages.
+  - **GET**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
   - **RESPONSE**:
+    - `http code`
     - JSON array of messages. Each message has:
-        - `id`: Unique identifier for the message.
-        - `content`: The content of the message.
+      - `id`: Unique identifier for the message.
+      - `content`: The content of the message.
+      - `file`: boolean if the message has a file attached.
 
 
 - `/api/v1/messages/add`: Add a new message.
-- 
-- `/api/v1/messages/remove`: Remove a message. #
-- `/api/v1/messages/list`: List all messages.
-- `/api/v1/messages/count`: Get the count of messages.
-- `/api/v1/messages/clear`: "Clear all messages", will panic immediately but response as if it was successful.
-- `/api/v1/messages/file`: Get the file of a message.
+  - **POST**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+      - `message`: The content of the message to add.
+      - `file`: Optional file to attach to the message.
+  - **RESPONSE**:
+    - `http code`
+    - JSON array of messages. Each message has:
+      - `id`: Unique identifier for the message.
+      - `content`: The content of the message.
 
+
+- `/api/v1/messages/remove`: Remove a message.
+  - **PUT**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+      - `message_id`: The ID of the message to remove.
+  - **RESPONSE**:
+    - `http code`
+
+  
+- `/api/v1/messages/list`: List all messages.
+  - **GET**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code` :
+    - JSON array of messages. Each message has:
+      - `id`: Unique identifier for the message.
+      - `content`: The content of the message.
+      - `file`: boolean if the message has a file attached.
+
+  
+- `/api/v1/messages/count`: Get the count of messages.
+  - **GET**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code` :
+    - `count`: The count of messages.
+
+
+- `/api/v1/messages/clear`: "Clear all messages", will panic immediately but response as if it was successful.
+  - **PUT**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code`
+
+
+- `/api/v1/messages/file`: Get the file of a message.
+  - **GET**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code` :
+    - `file`: The file of the message.
 
 ### Utilities:
-- `/api/v1/utils/ping`: Responds with "pong" to confirm the service is running. #Will respond but you are compromised.
+- `/api/v1/utils/ping`: Responds with "pong" to confirm the service is running. #Will respond, but you are compromised unless DEBUG MODE is enabled.
+  - **GET**:
+    - Does not require any fields.
+  - **RESPONSE**:
+    - `http code`
+    - `message` : "pong"
+
+
 - `/api/v1/utils/unlock`: Unlock the service. #Will unlock/stop PANIC but careful you might be compromised.
-- `/api/v1/utils/api`: Get a txt file of the APIs for the service.
-- `/api/v1/utils/debug`: Toggle debug mode on/off.  Endpoints will respond with more information.  **USE WITH CAUTION!**
-- `/api/v1/utils/ducky`: Get a txt file of the DuckyScript for the service.
-  - TODO: I think I need to make a ? to get individual scripts for the different files
-  - `?checkin`
-  - `?darkmode`
+  - **PUT**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code`
+
+  
+- `/api/v1/utils/api`: Get a txt file of the APIs for the service.  **USE WITH CAUTION!** This only works for a limited time in the starting of Dark Mode.
+  - **GET**:
+     - JSON object with the following fields:
+       - `id`: The ID of the user to check status for.
+       - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code`
+    - `file`: The txt file of the APIs for the service.
+
+
+- `/api/v1/utils/debug`: Toggle debug mode on/off.  Endpoints will respond with more information.  **USE WITH CAUTION!** Does not work in DARK MODE.
+  - **PUT**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code`
+
+
+- `/api/v1/utils/ducky`: Get a txt file of the DuckyScript for the service. **USE WITH CAUTION!** This only works for a limited time in the starting of Dark Mode.
+  - ?OPTIONS are: check-in, darkMode, unlock, api
+  - **GET**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code`
+    - `file`: The txt file of the DuckyScript for the service.  **USE WITH CAUTION!**
 
 ### Dark mode:
-- `/api/v1/darkmode`: Toggle dark mode on.  There is no response and no way to turn it off unless DEBUG MODE is enabled.
-- 
+- `/api/v1/darkmode`: Toggle dark mode on.  There is no response and no way to turn it off unless DEBUG MODE is enabled beforehand.
+  - **PUT**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code` : 404
+    - `message` : "Dark mode enabled. All endpoints will now respond with 404 and paths will rotate. Use /api/v1/utils/unlock to stop PANIC and return to normal operation, but be aware you may be compromised."
+    - `file`: A txt file of the APIs for the service.
+
+
+- `/api/v1/darkmode-api`: Get a txt file of the APIs for the service.  **USE WITH CAUTION!** This only works for a limited time in the starting of Dark Mode.
+  - **GET**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code` : 404
+    - `message` : "Dark mode enabled. All endpoint paths have rotated." / NONE
+    - `file`: A txt file of the APIs for the service. / NONE
+
+- `/api/v1/darkmode-ducky`: Get a txt file of the DuckyScript for the service. **USE WITH CAUTION!** This only works for a limited time in the starting of Dark Mode.
+  - ?OPTIONS are: check-in, darkMode, unlock, api
+  - **GET**:
+    - JSON object with the following fields:
+      - `id`: The ID of the user to check status for.
+      - `token`: The authentication token for the user.
+  - **RESPONSE**:
+    - `http code`
+    - `message` : "Dark mode enabled. All endpoint paths have rotated." / NONE
+    - `file`: A ducky script file for the service. / NONE
 
 ---
 
