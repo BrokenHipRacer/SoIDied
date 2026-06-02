@@ -1,3 +1,4 @@
+from api import app  # noqa: F401 — loads config and runs bootstrap via api module
 from src.tools.settings import Settings
 
 

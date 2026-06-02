@@ -1,24 +1,27 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_restful import Resource, Api, reqparse, fields, marshal_with, abort
+from flask_restful import Api
 
+from src.api.check_in import CheckIn, CheckInStatus
+from src.api.utils_api import UtilsApi
+from src.bootstrap import bootstrap_app
+from src.db.extensions import db
+from src.models.user import User  # noqa: F401 — register model with SQLAlchemy
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
-db = SQLAlchemy(app)
+db.init_app(app)
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+api = Api(app)
+api.add_resource(CheckIn, '/api/v1/checkin')
+api.add_resource(CheckInStatus, '/api/v1/checkin/status')
+api.add_resource(UtilsApi, '/api/v1/utils/api')
 
-user_args = reqparse.RequestParser()
-user_args.add_argument('username', type=str, required=True, help="Username is required")
-user_args.add_argument('email', type=str, required=True, help="Email is required")
+bootstrap_app(app)
+
 
 @app.route('/')
 def home():
-    return "Welcome to the SoIDied App!"
+    return 'Welcome to the SoIDied App!'
 
 
 if __name__ == '__main__':

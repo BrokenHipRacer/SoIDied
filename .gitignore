@@ -63,6 +63,11 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# SoIDied runtime secrets and local database
+startup/
+database.db
+instance/database.db
+
 # Scrapy stuff:
 .scrapy
 

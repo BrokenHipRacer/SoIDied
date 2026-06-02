@@ -8,8 +8,18 @@
 - **Entry Point**: `main.py` loads config via `Settings` class and initializes the system
 - **Configuration Management**: `src/tools/settings.py` provides `Settings` class for YAML config access
 - **REST API**: `src/api/` module with endpoint implementations; `api.py` provides Flask-RESTful endpoints with SQLAlchemy ORM (SQLite backend)
-- **Data Layer**: `src/models/` for database models; `src/db/` for database utilities; `create_db.py` initializes schema
+- **Data Layer**: `src/models/` for database models; `src/db/` for schema utilities; `src/bootstrap.py` initializes schema on app start
 - **Tooling**: `src/tools/` module for feature implementations (scheduler, email, defense, actions)
+
+### API intent and endpoint contract
+
+Before changing or adding anything under `src/api/`, routes in `api.py`, or related models and tools, **read [`doc/ENDPOINTS.md`](doc/ENDPOINTS.md)**. That document is the source of truth for:
+
+- Planned and current REST paths, methods, and request/response shapes
+- Security behavior (authentication via `id`/`token` or `user`/`token`, panic rules, dark mode semantics)
+- Product intent (what each endpoint is for and how it fits the dead-man's-switch flow)
+
+Implementations should align with `doc/ENDPOINTS.md` unless the user explicitly asks to change the contract; if code and the doc diverge, call out the gap and prefer updating implementation toward the documented intent (or update the doc when the contract is intentionally changed).
 
 ---
 
@@ -88,9 +98,7 @@ pip install -r requirements.txt
 ```
 
 ### Database Setup
-```bash
-python create_db.py  # Initializes SQLite schema with User model
-```
+Schema is created automatically when the app starts (`python api.py`). `create_db.py` is internal-only.
 
 ### Running the Application
 ```bash
@@ -129,20 +137,29 @@ if 'actions' in settings:
 
 ### Database Access Pattern
 ```python
-from api import app, db, User
+from api import app, db
+from src.models.user import User
+
 with app.app_context():
-    user = User.query.filter_by(username='name').first()  # Always use app context
+    user = User.query.filter_by(is_actual_user=True).first()  # Always use app context
 ```
+
+### Application bootstrap
+- **`bootstrap_app(app)`** in `src/bootstrap.py` runs at the bottom of `api.py` when the module is imported. It creates the schema, ensures one actual user, and writes startup files under `startup/`.
+- **Side effect on import:** Any `import api` (REPL, scripts, WSGI, `main.py`) triggers bootstrap unless skipped. This is intentional so production entry points (`gunicorn api:app`) initialize without a separate DB script.
+- **Skip bootstrap** when testing or tooling must not touch disk/DB: set `SOIDIED_SKIP_BOOTSTRAP=1` (see `test/conftest.py`) or `app.config['TESTING'] = True`.
+- **Do not** document `python create_db.py` for operators. That script is schema-only, requires `SOIDIED_INTERNAL=1`, does not import `api`, and does not create the actual user or startup files — use `python api.py` instead.
+- **`create_db.py` vs bootstrap:** Bootstrap owns full startup; `create_db.py` calls `run_standalone_schema_init()` in `src/db/schema.py` for rare internal schema-only use without loading the Flask API or running bootstrap twice.
 
 ### TODO Tracking
 - `main.py:13`: "EXPAND settings" - Add additional settings initialization
 - `main.py:14`: "GOAL : RUNNING DARK" (aspirational state name, likely security hardening)
 - `main.py:24`: `print_hi()` is placeholder - will be removed in production
 - **File Structure TODOs:**
-  - Implement API endpoints in `src/api/` (check_in.py, email.py, discord.py, facebook.py, file.py, unlock.py)
-  - Implement database models in `src/models/` (user.py, email_message.py, file.py, social_message.py)
-  - Implement database utilities in `src/db/`
-  - Create test suite structure in `test/` mirroring `src/`
+  - Implement remaining API endpoints in `src/api/` (email.py, discord.py, facebook.py, file.py, unlock.py, dark_mode.py, …)
+  - Implement additional database models in `src/models/` (email_message.py, file.py, social_message.py, …)
+  - Integrate check-in scheduler (increment `missed_check_in_count`, death sequence)
+  - Wire panic mode to `auth_fail_count` and rate limits
 - Search codebase for "## TODO" comments to find open work
 
 ---
@@ -161,7 +178,7 @@ with app.app_context():
 ## File Organization Strategy
 
 When extending the codebase:
-- **`src/api/`**: REST API endpoint implementations (check_in.py, email.py, discord.py, etc.)
+- **`src/api/`**: REST API endpoint implementations (check_in.py, email.py, discord.py, etc.) — match behavior and naming to [`doc/ENDPOINTS.md`](doc/ENDPOINTS.md)
 - **`src/models/`**: Database model definitions (user.py, email_message.py, social_message.py, etc.)
 - **`src/db/`**: Database utilities and connection management
 - **`src/tools/`**: Feature implementation modules (email, scheduler, defense, actions)
@@ -173,20 +190,31 @@ When extending the codebase:
 
 ## Red Flags & Questions to Ask
 
-- ❓ Where are check-in records stored? (Not in User model currently - needs table design)
-- ❓ How is "death" state persisted? (No status column in User model)
-- ❓ How are custom scripts executed safely? (Potential security issue - sanitization needed)
-- ⚠️ Email credentials: Where are provider API keys stored? (Not visible - likely environment variables, add to `.env` pattern)
-- ❓ Need to implement API endpoints in `src/api/` (check_in.py, email.py, discord.py, facebook.py, file.py, unlock.py)
-- ❓ Need to implement database models in `src/models/` (user.py, email_message.py, file.py, social_message.py)
-- ❓ Need to implement email provider abstraction in `src/tools/email/`
-- ❓ Need to implement check-in scheduler using APScheduler (currently installed but unused)
-- ❓ Need to implement panic mode defense system in `src/tools/defense.py`
+### Implemented (current baseline)
+- **Check-in state** on `User`: `last_check_in`, `missed_check_in_count`, `auth_fail_count`; `id` and `access_token` are UUID4 strings (`id` is unique PK).
+- **Actual user**: `is_actual_user` (ENDPOINTS “main” user); only one allowed; bootstrap creates one on startup.
+- **API (implemented):** `PUT /api/v1/checkin`, `GET /api/v1/checkin/status`, `GET /api/v1/utils/api` (startup file with credentials + routes).
+- **Auth:** Shared `id`/`token` JSON body via `src/api/auth.py`; failed auth increments `auth_fail_count` only (not missed check-ins).
+- **Startup files:** `startup/actual_user.md`, `startup/api.txt` (gitignored); refreshed on bootstrap.
+- **Tests:** `test/test_check_in.py`, `test/test_actual_user.py` (pytest; set `SOIDIED_SKIP_BOOTSTRAP=1` in conftest).
+
+### Still open
+- ❓ **`missed_check_in_count` is not incremented by a scheduler yet** — overdue check-ins return `Status: ALERT` via deadline math; `DEAD` needs APScheduler (or similar) to bump the counter per `defences.miss_count`.
+- ❓ **Death sequence persistence** — no dedicated death-state column or workflow; derived from counters and status logic only.
+- ❓ **Panic mode** — `auth_fail_count` is stored but not wired to `defences.panic_threshold` / lockdown.
+- ❓ **Dark mode** — 404 guard only; path rotation and startup file TTL not implemented.
+- ❓ **Custom scripts** — `actions.custom_script` needs safe execution (sanitization, sandbox).
+- ⚠️ **Email provider API keys** — not in repo; use environment variables / `.env` pattern.
+- ❓ **Remaining endpoints** — user management, messages, utils (ping, unlock, debug, ducky), dark mode per `doc/ENDPOINTS.md`.
+- ❓ **Email provider abstraction** — `src/tools/email/` not built.
+- ❓ **Additional models** — `email_message`, `file`, `social_message`, etc.
 
 ---
 
 ## Related Documentation
 
+- **Endpoint contract & product intent**: [`doc/ENDPOINTS.md`](doc/ENDPOINTS.md) — reference when implementing or changing API behavior
+- **Operational runbook**: [`doc/RUNBOOK.md`](doc/RUNBOOK.md) — install, database init, and local run steps
 - **Config Reference**: See `config.yaml` inline comments for all available settings
 - **Flask Documentation**: https://flask.palletsprojects.com/ (API framework)
 - **SQLAlchemy**: https://docs.sqlalchemy.org/ (ORM for database)
