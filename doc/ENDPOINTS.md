@@ -9,6 +9,11 @@
 - every endpoint will require id and token to be sent in the request.
 - adding messages will not trigger a panic.
 
+### HTTP notes (implemented routes)
+- Several routes use a **JSON request body** even for `GET` (for example `/api/v1/checkin/status`, `/api/v1/utils/api`). Clients must send `Content-Type: application/json` with `id` and `token`. Some HTTP stacks omit GET bodies; use curl, Postman, or a client that supports GET with a body.
+- The **actual user** (owner) is stored as `is_actual_user=true` in the database. Documentation may refer to this user as "main"; only this user's check-ins clear `missed_check_in_count`.
+- Failed authentication increments `auth_fail_count` only. **`missed_check_in_count`** and `Status: DEAD` relate to missed check-ins, not bad tokens.
+
 
 ---
 
@@ -182,14 +187,14 @@
     - `http code`
 
   
-- `/api/v1/utils/api`: Get a txt file of the APIs for the service.  **USE WITH CAUTION!** This only works for a limited time in the starting of Dark Mode.
+- `/api/v1/utils/api`: Get the startup API file for the service (actual user only). Written on app bootstrap to `settings.api_startup_file` (default `startup/api.txt`). Includes actual-user `id`/`token` and a list of documented routes. **USE WITH CAUTION!** In dark mode, responds with 404 like other routes.
   - **GET**:
      - JSON object with the following fields:
-       - `id`: The ID of the user to check status for.
+       - `id`: The ID of the actual user.
        - `token`: The authentication token for the user.
   - **RESPONSE**:
     - `http code`
-    - `file`: The txt file of the APIs for the service.
+    - `file`: The startup API text file (credentials plus documented routes).
 
 
 - `/api/v1/utils/debug`: Toggle debug mode on/off.  Endpoints will respond with more information.  **USE WITH CAUTION!** Does not work in DARK MODE.

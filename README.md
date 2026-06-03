@@ -72,19 +72,14 @@ This system handles sensitive post-mortem notifications and data deletion. **Use
    # ... configure other settings
    ```
 
-5. **Initialize database**
+5. **Run the application** (creates the database and startup credential files automatically)
    ```bash
-   python create_db.py
-   ```
-
-6. **Run the application**
-   ```bash
-   # Start main system
-   python main.py
-
-   # Or run API server
    python api.py
    ```
+
+   On first start, read `startup/actual_user.md` for your API `id` and `token`, or use `GET /api/v1/utils/api` (actual user only). See [`doc/RUNBOOK.md`](doc/RUNBOOK.md).
+
+   For local development, set `settings.dark_mode: false` in `config.yaml` so API routes are reachable.
 
 ## Configuration
 
@@ -131,7 +126,8 @@ SoIDied/
 ├── main.py              # Entry point, loads config
 ├── api.py               # Flask app orchestration
 ├── config.yaml          # Configuration file
-├── create_db.py         # Database initialization
+├── create_db.py         # Internal schema init (do not run manually)
+├── src/bootstrap.py     # App startup: schema + actual user + startup files
 ├── requirements.txt     # Python dependencies
 ├── AGENTS.md           # AI development guide
 ├── README.md           # This file
@@ -178,9 +174,7 @@ See [`AGENTS.md`](AGENTS.md) for detailed development guidelines, code patterns,
 
 ### Testing
 ```bash
-# Create tests directory structure mirroring src/
-# Run tests (when implemented)
-pytest tests/
+pytest -v
 ```
 
 ## Security Considerations
@@ -210,8 +204,11 @@ See [LICENSE](LICENSE) file.
 - [x] Basic Flask app setup (`api.py`)
 - [x] Configuration system (`config.yaml`)
 - [x] Virtual environment setup
-- [ ] API endpoint implementations (`src/api/*.py`)
-- [ ] Database model definitions (`src/models/*.py`)
+- [x] Check-in API (`PUT /api/v1/checkin`, `GET /api/v1/checkin/status`)
+- [x] User model and actual-user bootstrap (`src/models/user.py`, `src/bootstrap.py`)
+- [x] Startup API file (`GET /api/v1/utils/api`)
+- [ ] Remaining API endpoint implementations (`src/api/*.py`)
+- [ ] Additional database models (`src/models/*.py`)
 - [ ] Check-in scheduler integration
 - [ ] Email provider abstractions
 - [ ] Panic mode defense system
