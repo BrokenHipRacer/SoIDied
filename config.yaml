@@ -12,7 +12,7 @@ settings:
     ## DEBUG, INFO, WARNING, ERROR, CRITICAL
   debug: false
     ## not sure what this does yet, but it will probably enable some extra logging and features for testing purposes. Use with caution.
-  dark_mode: true
+  dark_mode: false
     ## dark mode is: no api responses will be sent back, and the api endpoints with rotate from the written code, and at startup a file will be written to disk with the api endpoints and their functions. Use with caution.
   actual_user_credentials_file: startup/actual_user.md
     ## written on startup with the actual user's id and token (also included in api_startup_file)

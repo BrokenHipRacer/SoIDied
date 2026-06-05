@@ -202,7 +202,7 @@ When extending the codebase:
 - ❓ **`missed_check_in_count` is not incremented by a scheduler yet** — overdue check-ins return `Status: ALERT` via deadline math; `DEAD` needs APScheduler (or similar) to bump the counter per `defences.miss_count`.
 - ❓ **Death sequence persistence** — no dedicated death-state column or workflow; derived from counters and status logic only.
 - ❓ **Panic mode** — `auth_fail_count` is stored but not wired to `defences.panic_threshold` / lockdown.
-- ❓ **Dark mode** — 404 guard only; path rotation and startup file TTL not implemented.
+- **Dark mode (rotation)** — `settings.dark_mode: true` rotates paths at boot; `PUT /api/v1/darkmode` enables in-memory rotation for this process only. Canonical paths return 404; `startup/api.txt` lists active secret paths. Response masking (404 on all responses) not implemented yet.
 - ❓ **Custom scripts** — `actions.custom_script` needs safe execution (sanitization, sandbox).
 - ⚠️ **Email provider API keys** — not in repo; use environment variables / `.env` pattern.
 - ❓ **Remaining endpoints** — user management, messages, utils (ping, unlock, debug, ducky), dark mode per `doc/ENDPOINTS.md`.

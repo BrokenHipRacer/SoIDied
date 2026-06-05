@@ -7,16 +7,6 @@ from src.tools.settings import Settings
 DEFAULT_CREDENTIALS_PATH = 'startup/actual_user.md'
 DEFAULT_API_STARTUP_PATH = 'startup/api.txt'
 
-DOCUMENTED_API_ROUTES = [
-    'PUT /api/v1/checkin',
-    'GET /api/v1/checkin/status',
-    'GET /api/v1/utils/api',
-    'GET /api/v1/utils/ping',
-    'PUT /api/v1/utils/unlock',
-    'PUT /api/v1/utils/debug',
-    'GET /api/v1/utils/ducky',
-]
-
 
 def credentials_file_path(settings: Settings | None = None) -> Path:
     settings = settings or Settings()
@@ -61,6 +51,15 @@ def ensure_actual_user() -> User:
     return user
 
 
+def regenerate_actual_user_credentials() -> User:
+    """Issue a fresh id and token for the actual user (check-in state is preserved)."""
+    user = ensure_actual_user()
+    user.id = User.generate_id()
+    user.access_token = User.generate_access_token()
+    db.session.commit()
+    return user
+
+
 def format_credentials_markdown(user: User, settings: Settings | None = None) -> str:
     settings = settings or Settings()
     app_name = settings.get('app', {}).get('name', 'SoIDied')
@@ -72,14 +71,33 @@ def format_credentials_markdown(user: User, settings: Settings | None = None) ->
     )
 
 
-def format_api_startup_file(user: User, settings: Settings | None = None) -> str:
+def format_api_startup_file(
+    user: User,
+    settings: Settings | None = None,
+    route_lines: list[str] | None = None,
+) -> str:
     settings = settings or Settings()
-    routes = '\n'.join(f'- {route}' for route in DOCUMENTED_API_ROUTES)
+    if route_lines is None:
+        from src.api.routing import get_active_route_lines
+
+        route_lines = get_active_route_lines()
+    routes = '\n'.join(f'- {route}' for route in route_lines)
+    heading = (
+        '## Active API routes (dark mode — paths rotate each session/boot)\n\n'
+        if _startup_routes_are_rotated(route_lines)
+        else '## Documented API routes\n\n'
+    )
     return (
         f'{format_credentials_markdown(user, settings)}\n'
-        '## Documented API routes\n\n'
+        f'{heading}'
         f'{routes}\n'
     )
+
+
+def _startup_routes_are_rotated(route_lines: list[str]) -> bool:
+    from src.api.route_registry import canonical_route_lines
+
+    return route_lines != canonical_route_lines()
 
 
 def write_actual_user_credentials_file(
@@ -116,9 +134,9 @@ def read_api_startup_file(settings: Settings | None = None) -> str | None:
 
 
 def initialize_actual_user(settings: Settings | None = None) -> User:
-    """Ensure the actual user exists and refresh on-disk startup files."""
+    """Rotate the actual user's id/token on each start and refresh on-disk startup files."""
     settings = settings or Settings()
-    user = ensure_actual_user()
+    user = regenerate_actual_user_credentials()
     write_actual_user_credentials_file(user, settings)
     write_api_startup_file(user, settings)
     return user

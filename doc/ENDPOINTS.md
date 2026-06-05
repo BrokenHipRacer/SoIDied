@@ -194,7 +194,7 @@
        - `token`: The authentication token for the user.
   - **RESPONSE**:
     - `http code`
-    - `file`: The startup API text file (credentials plus documented routes).
+    - The startup API text file itself, served as a `text/plain` download (`Content-Disposition: attachment`) containing credentials plus the active routes.
 
 
 - `/api/v1/utils/debug`: Toggle debug mode on/off.  Endpoints will respond with more information.  **USE WITH CAUTION!** Does not work in DARK MODE.
@@ -223,9 +223,8 @@
       - `id`: The ID of the user to check status for.
       - `token`: The authentication token for the user.
   - **RESPONSE**:
-    - `http code` : 404
-    - `message` : "Dark mode enabled. All endpoints will now respond with 404 and paths will rotate. Use /api/v1/utils/unlock to stop PANIC and return to normal operation, but be aware you may be compromised."
-    - `file`: A txt file of the APIs for the service.
+    - `http code`
+    - The rotated API text file itself, served as a `text/plain` download (`Content-Disposition: attachment`) containing credentials plus the active (rotated) routes.
 
 
 - `/api/v1/darkmode-api`: Get a txt file of the APIs for the service.  **USE WITH CAUTION!** This only works for a limited time in the starting of Dark Mode.

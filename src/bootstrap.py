@@ -16,6 +16,14 @@ def should_bootstrap() -> bool:
     return True
 
 
+def _print_actual_user_credentials(user) -> None:
+    print('=' * 60)
+    print('SoIDied actual user credentials (use as `id` / `token`):')
+    print(f'  id:    {user.id}')
+    print(f'  token: {user.access_token}')
+    print('=' * 60)
+
+
 def bootstrap_app(app: Flask) -> None:
     """Create schema, ensure actual user exists, and write startup files."""
     if app.config.get('TESTING') or not should_bootstrap():
@@ -26,7 +34,8 @@ def bootstrap_app(app: Flask) -> None:
     try:
         with app.app_context():
             create_schema()
-            initialize_actual_user()
+            user = initialize_actual_user()
+            _print_actual_user_credentials(user)
     finally:
         if previous is None:
             os.environ.pop(INTERNAL_ENV, None)
