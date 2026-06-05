@@ -1,8 +1,7 @@
 from flask import Flask
 from flask_restful import Api
 
-from src.api.check_in import CheckIn, CheckInStatus
-from src.api.utils_api import UtilsApi
+from src.api.routing import bind_restful_api, init_api_routes
 from src.bootstrap import bootstrap_app
 from src.db.extensions import db
 from src.models.user import User  # noqa: F401 — register model with SQLAlchemy
@@ -12,9 +11,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 db.init_app(app)
 
 api = Api(app)
-api.add_resource(CheckIn, '/api/v1/checkin')
-api.add_resource(CheckInStatus, '/api/v1/checkin/status')
-api.add_resource(UtilsApi, '/api/v1/utils/api')
+bind_restful_api(app, api)
+init_api_routes(app, api)
 
 bootstrap_app(app)
 

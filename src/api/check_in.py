@@ -1,7 +1,6 @@
 from flask_restful import Resource
 
 from src.api.auth import authenticate_credentials, load_json_payload
-from src.api.guards import dark_mode_not_found, is_dark_mode_enabled
 from src.db.extensions import db
 from src.tools.check_in import (
     compute_next_check_in_deadline,
@@ -15,9 +14,6 @@ from src.tools.settings import Settings
 
 class CheckIn(Resource):
     def put(self):
-        if is_dark_mode_enabled():
-            return dark_mode_not_found()
-
         payload = load_json_payload()
         user, error = authenticate_credentials(payload)
         if error:
@@ -39,9 +35,6 @@ class CheckIn(Resource):
 
 class CheckInStatus(Resource):
     def get(self):
-        if is_dark_mode_enabled():
-            return dark_mode_not_found()
-
         payload = load_json_payload()
         user, error = authenticate_credentials(payload)
         if error:

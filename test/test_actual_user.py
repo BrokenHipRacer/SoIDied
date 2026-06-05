@@ -49,6 +49,21 @@ def test_ensure_actual_user_creates_single_actual_user(client):
         assert User.query.filter_by(is_actual_user=True).count() == 1
 
 
+def test_initialize_actual_user_rotates_credentials_each_start(client):
+    with app.app_context():
+        first = initialize_actual_user()
+        first_id, first_token = first.id, first.access_token
+        first.missed_check_in_count = 3
+        db.session.commit()
+
+        second = initialize_actual_user()
+
+        assert second.id != first_id
+        assert second.access_token != first_token
+        assert User.query.filter_by(is_actual_user=True).count() == 1
+        assert second.missed_check_in_count == 3
+
+
 def test_only_one_actual_user_allowed(client):
     with app.app_context():
         ensure_actual_user()
@@ -80,10 +95,13 @@ def test_utils_api_endpoint_returns_startup_file_for_actual_user(client):
     response = test_client.get(UTILS_API_URL, json=_auth_body(user))
 
     assert response.status_code == 200
-    data = response.get_json()
-    assert user.id in data['file']
-    assert user.access_token in data['file']
-    assert 'PUT /api/v1/checkin' in data['file']
+    assert response.mimetype == 'text/plain'
+    assert 'attachment' in response.headers['Content-Disposition']
+    assert 'api.txt' in response.headers['Content-Disposition']
+    body = response.get_data(as_text=True)
+    assert user.id in body
+    assert user.access_token in body
+    assert 'PUT /api/v1/checkin' in body
     assert read_api_startup_file() == api_file.read_text(encoding='utf-8')
 
 
