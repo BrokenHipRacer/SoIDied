@@ -98,10 +98,13 @@
       - `token`: The authentication token for the user.
   - **RESPONSE**:
     - `http code`
-    - JSON array of messages. Each message has:
+    - JSON array of messages. File attachments are not returned. Each message has:
       - `id`: Unique identifier for the message.
-      - `content`: The content of the message.
-      - `file`: boolean if the message has a file attached.
+      - `network_name`: The network/provider name.
+      - `recipient`: One recipient string.
+      - `message`: The content of the message.
+      - `file`: Boolean indicating whether a file is attached.
+      - `file_ext`: The attached file extension, such as `.txt`, or `null`.
 
 
 - `/api/v1/messages/add`: Add one message upload and fan it out into one database row per recipient. If a file is attached, only one file copy is stored and each generated row points at the same file path. Adding messages will not trigger panic.
@@ -141,10 +144,13 @@
       - `token`: The authentication token for the user.
   - **RESPONSE**:
     - `http code` :
-    - JSON array of messages. Each message has:
+    - JSON array of messages. File attachments are not returned. Each message has:
       - `id`: Unique identifier for the message.
-      - `content`: The content of the message.
-      - `file`: boolean if the message has a file attached.
+      - `network_name`: The network/provider name.
+      - `recipient`: One recipient string.
+      - `message`: The content of the message.
+      - `file`: Boolean indicating whether a file is attached.
+      - `file_ext`: The attached file extension, such as `.txt`, or `null`.
 
   
 - `/api/v1/messages/count`: Get the count of messages.

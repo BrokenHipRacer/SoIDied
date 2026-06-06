@@ -3,7 +3,7 @@ import json
 from flask import request
 from flask_restful import Resource
 
-from src.api.auth import authenticate_credentials
+from src.api.auth import authenticate_credentials, load_json_payload
 from src.db.extensions import db
 from src.models.message import Message
 from src.tools.message_files import save_message_attachment
@@ -77,3 +77,17 @@ class MessageUpload(Resource):
             'count': len(messages),
             'messages': [message.to_dict() for message in messages],
         }, 201
+
+
+class MessageList(Resource):
+    def get(self):
+        payload = load_json_payload()
+        user, error = authenticate_credentials(payload)
+        if error:
+            return error
+
+        if not user.is_actual_user:
+            return {'message': 'Forbidden'}, 403
+
+        messages = Message.query.order_by(Message.id).all()
+        return [message.to_list_dict() for message in messages], 200

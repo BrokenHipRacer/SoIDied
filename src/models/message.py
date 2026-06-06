@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from src.db.extensions import db
 
 
@@ -18,4 +20,15 @@ class Message(db.Model):
             'message': self.message,
             'file_path': self.file_path,
             'file': self.file_path is not None,
+        }
+
+    def to_list_dict(self):
+        file_ext = Path(self.file_path).suffix if self.file_path else None
+        return {
+            'id': self.id,
+            'network_name': self.network_name,
+            'recipient': self.recipient,
+            'message': self.message,
+            'file': self.file_path is not None,
+            'file_ext': file_ext or None,
         }
