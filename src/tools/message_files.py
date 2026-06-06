@@ -10,13 +10,21 @@ from src.tools.settings import Settings
 DEFAULT_MESSAGE_UPLOAD_FOLDER = 'startup/message_files'
 
 
+def _reject_unsafe_upload_folder(path: Path) -> None:
+    resolved = path.resolve(strict=False)
+    if resolved == Path(resolved.anchor) or resolved == Path.cwd().resolve():
+        raise ValueError('Message upload folder must be a dedicated subdirectory')
+
+
 def message_upload_folder_path(settings: Settings | None = None) -> Path:
     settings = settings or Settings()
     configured = settings.get('settings', {}).get(
         'message_upload_folder',
         DEFAULT_MESSAGE_UPLOAD_FOLDER,
     )
-    return Path(configured)
+    path = Path(configured)
+    _reject_unsafe_upload_folder(path)
+    return path
 
 
 def ensure_message_upload_folder(settings: Settings | None = None) -> Path:

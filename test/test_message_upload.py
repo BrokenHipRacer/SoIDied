@@ -1,5 +1,6 @@
 import io
 import json
+from pathlib import Path
 
 import pytest
 from werkzeug.datastructures import MultiDict
@@ -32,6 +33,12 @@ def client(tmp_path, monkeypatch):
 
 def _auth_fields(user: User) -> dict:
     return {'id': user.id, 'token': user.access_token}
+
+
+def _folder_entries(upload_folder: Path) -> list[Path]:
+    if not upload_folder.exists():
+        return []
+    return list(upload_folder.iterdir())
 
 
 @pytest.fixture
@@ -70,7 +77,8 @@ def test_message_upload_fans_out_rows_and_reuses_one_file(client, main_auth):
 
     file_paths = {message.file_path for message in saved}
     assert len(file_paths) == 1
-    saved_path = upload_folder / next(iter(file_paths)).split('/')[-1]
+    saved_path = Path(next(iter(file_paths)))
+    assert saved_path.parent == upload_folder
     assert saved_path.is_file()
     assert saved_path.read_bytes() == b'attachment contents'
     assert all(message_dict['file'] is True for message_dict in data['messages'])
@@ -123,6 +131,125 @@ def test_message_upload_requires_actual_user(client):
 
     assert response.status_code == 403
     assert Message.query.count() == 0
+    assert _folder_entries(_upload_folder) == []
+
+
+@pytest.mark.parametrize(
+    ('missing_field', 'expected_message'),
+    [
+        ('network', 'Missing required field: network'),
+        ('message', 'Missing required field: message'),
+        ('recipients', 'Missing required field: recipients'),
+    ],
+)
+def test_message_upload_rejects_missing_required_fields_without_side_effects(
+    client,
+    main_auth,
+    missing_field,
+    expected_message,
+):
+    test_client, upload_folder = client
+    data = {
+        **main_auth,
+        'network': 'email',
+        'recipients': json.dumps(['alex@example.com']),
+        'message': 'Should not save.',
+        'file': (io.BytesIO(b'should not save'), 'payload.txt'),
+    }
+    del data[missing_field]
+
+    response = test_client.post(
+        MESSAGES_ADD_URL,
+        data=data,
+        content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()['message'] == expected_message
+    assert Message.query.count() == 0
+    assert _folder_entries(upload_folder) == []
+
+
+@pytest.mark.parametrize(
+    ('recipients', 'expected_message'),
+    [
+        ('[not-json', 'Invalid JSON array for field: recipients'),
+        (json.dumps(['alex@example.com', 3]), 'Field recipients must be an array of strings'),
+        (json.dumps([' ', '']), 'Field recipients must include at least one recipient'),
+        ('  ', 'Field recipients must include at least one recipient'),
+    ],
+)
+def test_message_upload_rejects_invalid_recipients_without_side_effects(
+    client,
+    main_auth,
+    recipients,
+    expected_message,
+):
+    test_client, upload_folder = client
+    response = test_client.post(
+        MESSAGES_ADD_URL,
+        data={
+            **main_auth,
+            'network': 'email',
+            'recipients': recipients,
+            'message': 'Should not save.',
+            'file': (io.BytesIO(b'should not save'), 'payload.txt'),
+        },
+        content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()['message'] == expected_message
+    assert Message.query.count() == 0
+    assert _folder_entries(upload_folder) == []
+
+
+def test_message_upload_rejects_invalid_token_before_saving_file(client, main_auth):
+    test_client, upload_folder = client
+
+    response = test_client.post(
+        MESSAGES_ADD_URL,
+        data={
+            'id': main_auth['id'],
+            'token': User.generate_access_token(),
+            'network': 'email',
+            'recipients': json.dumps(['alex@example.com']),
+            'message': 'Should not save.',
+            'file': (io.BytesIO(b'should not save'), 'payload.txt'),
+        },
+        content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 401
+    assert Message.query.count() == 0
+    assert _folder_entries(upload_folder) == []
+    user = User.query.filter_by(id=main_auth['id']).one()
+    assert user.auth_fail_count == 1
+
+
+def test_message_upload_sanitizes_attachment_filename(client, main_auth):
+    test_client, upload_folder = client
+
+    response = test_client.post(
+        MESSAGES_ADD_URL,
+        data={
+            **main_auth,
+            'network': 'email',
+            'recipients': json.dumps(['alex@example.com']),
+            'message': 'Sanitize this file name.',
+            'file': (io.BytesIO(b'attachment'), '../../secret.txt'),
+        },
+        content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 201
+    saved = Message.query.one()
+    saved_path = Path(saved.file_path)
+    assert saved_path.parent == upload_folder
+    assert '..' not in saved_path.name
+    assert '/' not in saved_path.name
+    assert saved_path.name.endswith('_secret.txt')
+    assert saved_path.read_bytes() == b'attachment'
 
 
 def test_prepare_message_upload_folder_clears_previous_runtime_files(tmp_path):
@@ -144,3 +271,15 @@ def test_prepare_message_upload_folder_clears_previous_runtime_files(tmp_path):
     assert prepared == upload_folder
     assert upload_folder.is_dir()
     assert list(upload_folder.iterdir()) == []
+
+
+@pytest.mark.parametrize('configured_path', ['/', '.'])
+def test_prepare_message_upload_folder_rejects_unsafe_cleanup_targets(configured_path):
+    class TestSettings:
+        def get(self, key, default=None):
+            if key == 'settings':
+                return {'message_upload_folder': configured_path}
+            return default
+
+    with pytest.raises(ValueError, match='dedicated subdirectory'):
+        prepare_message_upload_folder(TestSettings())
