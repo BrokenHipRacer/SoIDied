@@ -35,21 +35,22 @@ def _auth_fields(user: User) -> dict:
 
 
 @pytest.fixture
-def main_user(client):
+def main_auth(client):
     with app.app_context():
         user = User(is_actual_user=True)
         db.session.add(user)
+        auth = _auth_fields(user)
         db.session.commit()
-        return user
+        return auth
 
 
-def test_message_upload_fans_out_rows_and_reuses_one_file(client, main_user):
+def test_message_upload_fans_out_rows_and_reuses_one_file(client, main_auth):
     test_client, upload_folder = client
     recipients = ['alex@example.com', 'casey@example.com']
     response = test_client.post(
         MESSAGES_ADD_URL,
         data={
-            **_auth_fields(main_user),
+            **main_auth,
             'network': 'email',
             'recipients': json.dumps(recipients),
             'message': 'Shared message body.',
@@ -75,12 +76,12 @@ def test_message_upload_fans_out_rows_and_reuses_one_file(client, main_user):
     assert all(message_dict['file'] is True for message_dict in data['messages'])
 
 
-def test_message_upload_accepts_repeated_recipient_fields_without_file(client, main_user):
+def test_message_upload_accepts_repeated_recipient_fields_without_file(client, main_auth):
     test_client, _upload_folder = client
     form = MultiDict(
         [
-            ('id', main_user.id),
-            ('token', main_user.access_token),
+            ('id', main_auth['id']),
+            ('token', main_auth['token']),
             ('network', 'discord'),
             ('recipients', 'channel-1'),
             ('recipients', 'channel-2'),
@@ -106,12 +107,13 @@ def test_message_upload_requires_actual_user(client):
     with app.app_context():
         user = User(is_actual_user=False)
         db.session.add(user)
+        auth = _auth_fields(user)
         db.session.commit()
 
     response = test_client.post(
         MESSAGES_ADD_URL,
         data={
-            **_auth_fields(user),
+            **auth,
             'network': 'email',
             'recipients': json.dumps(['alex@example.com']),
             'message': 'Should not save.',
