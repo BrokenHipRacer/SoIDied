@@ -4,6 +4,7 @@ from flask import Flask
 
 from src.db.schema import create_schema
 from src.tools.actual_user import initialize_actual_user
+from src.tools.message_files import prepare_message_upload_folder
 
 INTERNAL_ENV = 'SOIDIED_INTERNAL'
 
@@ -33,6 +34,7 @@ def bootstrap_app(app: Flask) -> None:
     os.environ[INTERNAL_ENV] = '1'
     try:
         with app.app_context():
+            prepare_message_upload_folder()
             create_schema()
             user = initialize_actual_user()
             _print_actual_user_credentials(user)

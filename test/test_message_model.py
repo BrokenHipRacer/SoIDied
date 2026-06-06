@@ -10,7 +10,7 @@ def test_message_model_persists_requested_fields():
         db.create_all()
         message = Message(
             network_name='email',
-            recipient_name='Alex',
+            recipient='alex@example.com',
             message='This is the message body.',
             file_path='/safe/storage/attachment.pdf',
         )
@@ -21,22 +21,23 @@ def test_message_model_persists_requested_fields():
 
         assert saved.id == 1
         assert saved.network_name == 'email'
-        assert saved.recipient_name == 'Alex'
+        assert saved.recipient == 'alex@example.com'
         assert saved.message == 'This is the message body.'
         assert saved.file_path == '/safe/storage/attachment.pdf'
         assert saved.to_dict() == {
             'id': 1,
             'network_name': 'email',
-            'recipient_name': 'Alex',
+            'recipient': 'alex@example.com',
             'message': 'This is the message body.',
             'file_path': '/safe/storage/attachment.pdf',
+            'file': True,
         }
 
         db.session.remove()
         db.drop_all()
 
 
-def test_message_model_allows_optional_recipient_and_file_path():
+def test_message_model_allows_optional_file_path():
     app.config['TESTING'] = True
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
 
@@ -44,6 +45,7 @@ def test_message_model_allows_optional_recipient_and_file_path():
         db.create_all()
         message = Message(
             network_name='discord',
+            recipient='channel-123',
             message='A message without personalization or an attachment.',
         )
         db.session.add(message)
@@ -51,8 +53,9 @@ def test_message_model_allows_optional_recipient_and_file_path():
 
         saved = Message.query.one()
 
-        assert saved.recipient_name is None
+        assert saved.recipient == 'channel-123'
         assert saved.file_path is None
+        assert saved.to_dict()['file'] is False
 
         db.session.remove()
         db.drop_all()

@@ -104,18 +104,24 @@
       - `file`: boolean if the message has a file attached.
 
 
-- `/api/v1/messages/add`: Add a new message.
+- `/api/v1/messages/add`: Add one message upload and fan it out into one database row per recipient. If a file is attached, only one file copy is stored and each generated row points at the same file path. Adding messages will not trigger panic.
   - **POST**:
-    - JSON object with the following fields:
+    - `multipart/form-data` with the following fields:
       - `id`: The ID of the user to check status for.
       - `token`: The authentication token for the user.
+      - `network`: The network/provider name, such as `email`, `Facebook`, `discord`, or `Twitter`.
+      - `recipients`: Array of recipient strings. Send as a JSON array string (for example `["a@example.com","b@example.com"]`) or repeat the `recipients` form field.
       - `message`: The content of the message to add.
-      - `file`: Optional file to attach to the message.
+      - `file`: Optional file to attach to the message. Runtime files are stored under `settings.message_upload_folder` (default `startup/message_files`), which is created and cleared every app start/restart.
   - **RESPONSE**:
     - `http code`
-    - JSON array of messages. Each message has:
-      - `id`: Unique identifier for the message.
-      - `content`: The content of the message.
+    - JSON object containing `count` and a `messages` array. Each message has:
+      - `id`: Unique identifier for the generated message row.
+      - `network_name`: The network/provider name.
+      - `recipient`: One recipient string.
+      - `message`: The content of the message.
+      - `file_path`: The saved file path, or `null`.
+      - `file`: Boolean indicating whether a file is attached.
 
 
 - `/api/v1/messages/remove`: Remove a message.

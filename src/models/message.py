@@ -6,7 +6,7 @@ class Message(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     network_name = db.Column(db.String(120), nullable=False)
-    recipient_name = db.Column(db.String(255), nullable=True)
+    recipient = db.Column(db.String(255), nullable=False)
     message = db.Column(db.Text, nullable=False)
     file_path = db.Column(db.String(1024), nullable=True)
 
@@ -14,7 +14,8 @@ class Message(db.Model):
         return {
             'id': self.id,
             'network_name': self.network_name,
-            'recipient_name': self.recipient_name,
+            'recipient': self.recipient,
             'message': self.message,
             'file_path': self.file_path,
+            'file': self.file_path is not None,
         }
