@@ -219,3 +219,56 @@ When extending the codebase:
 - **Flask Documentation**: https://flask.palletsprojects.com/ (API framework)
 - **SQLAlchemy**: https://docs.sqlalchemy.org/ (ORM for database)
 - **APScheduler**: https://apscheduler.readthedocs.io/ (Scheduled task execution)
+
+---
+
+## Cursor Cloud specific instructions
+
+### VM prerequisites
+
+Ubuntu/Debian cloud VMs need the `python3.12-venv` system package before `python3 -m venv` works (`sudo apt-get install -y python3.12-venv`). This is a one-time image/snapshot concern, not part of the repo update script.
+
+### Dependency refresh
+
+After the update script runs, activate the venv before Python commands:
+
+```bash
+source venv/bin/activate
+```
+
+Or call `venv/bin/python` / `venv/bin/pytest` directly without activating.
+
+### Running the API (required for E2E)
+
+Only one process is needed for local development: the Flask API.
+
+```bash
+source venv/bin/activate
+python api.py
+```
+
+Listens on `http://127.0.0.1:5000`. Bootstrap creates `database.db` and writes credentials to `startup/actual_user.md` on first start.
+
+Keep `settings.dark_mode: false` in `config.yaml` for normal local/API testing. When `dark_mode` is `true`, canonical routes return 404 and paths are rotated.
+
+### Tests
+
+```bash
+source venv/bin/activate
+pytest -v
+```
+
+Tests set `SOIDIED_SKIP_BOOTSTRAP=1` via `test/conftest.py` and use an in-memory SQLite DB — no running server or `database.db` required.
+
+### Lint
+
+No linter or formatter is configured in this repo (no ruff/flake8/pyproject CI). Validation is via `pytest -v`.
+
+### Quick smoke test (after starting `api.py`)
+
+1. `curl http://127.0.0.1:5000/` → `Welcome to the SoIDied App!`
+2. Read `id` / `token` from `startup/actual_user.md`
+3. `PUT /api/v1/checkin` with JSON body `{"id": "...", "token": "..."}` → next check-in deadline
+4. `GET /api/v1/checkin/status` with the same body → `{"Status": "OK"}`
+
+See [`doc/RUNBOOK.md`](doc/RUNBOOK.md) for curl examples.
