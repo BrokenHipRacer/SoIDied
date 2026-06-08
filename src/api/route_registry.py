@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Type
 
 from flask_restful import Resource
 
@@ -10,7 +9,7 @@ from src.api.utils_api import UtilsApi
 
 @dataclass(frozen=True)
 class RouteSpec:
-    resource: Type[Resource]
+    resource: type[Resource]
     canonical_path: str
     methods: tuple[str, ...]
     endpoint: str
@@ -30,4 +29,8 @@ DARKMODE_ENDPOINT = 'darkmode'
 
 
 def canonical_route_lines() -> list[str]:
-    return [f'{method} {spec.canonical_path}' for spec in ROTATABLE_ROUTES for method in spec.methods]
+    return [
+        f'{method} {spec.canonical_path}'
+        for spec in ROTATABLE_ROUTES
+        for method in spec.methods
+    ]
