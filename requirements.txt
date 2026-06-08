@@ -15,6 +15,7 @@ pycparser==3.0
 pytest==9.0.3
 pytz==2025.2
 PyYAML==6.0.3
+ruff==0.15.16
 six==1.17.0
 SQLAlchemy==2.0.46
 typing_extensions==4.15.0

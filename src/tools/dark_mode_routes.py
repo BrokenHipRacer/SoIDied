@@ -1,7 +1,7 @@
 import secrets
 from dataclasses import dataclass
 
-from src.api.route_registry import RouteSpec, ROTATABLE_ROUTES
+from src.api.route_registry import ROTATABLE_ROUTES, RouteSpec
 
 
 @dataclass(frozen=True)

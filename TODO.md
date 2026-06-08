@@ -6,3 +6,4 @@ Note of things to do
 5. Optimize performance
 6. Discord integration
 7. Facebook integration
+8. Adopt `ruff format` across the codebase (currently lint-only; formatter would reformat ~31 files, mostly quote style)

@@ -1,6 +1,7 @@
-import yaml
 import os
-from typing import Any, Dict, Optional
+from typing import Any
+
+import yaml
 
 
 class Settings:
@@ -20,12 +21,12 @@ class Settings:
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-        with open(config_path, 'r') as file:
-            self._config: Dict[str, Any] = yaml.safe_load(file)
+        with open(config_path) as file:
+            self._config: dict[str, Any] = yaml.safe_load(file)
 
         self.config_path = config_path
 
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
+    def get(self, key: str, default: Any | None = None) -> Any:
         """
         Get a top-level configuration key with an optional default value.
 
@@ -69,6 +70,6 @@ class Settings:
         return key in self._config
 
     @property
-    def config(self) -> Dict[str, Any]:
+    def config(self) -> dict[str, Any]:
         """Get the raw configuration dictionary."""
         return self._config
