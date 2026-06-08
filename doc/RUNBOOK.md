@@ -55,13 +55,15 @@ python -m pip install --upgrade pip
 
 Do **not** run `create_db.py` manually. It is internal-only and exits with instructions if invoked directly.
 
-Starting the application runs **bootstrap**, which:
+Starting the application with `run.sh` and Flask **bootstrap**:
 
-1. Creates SQLite tables if missing (`database.db`)
-2. Ensures exactly one **actual user** (`is_actual_user=true`) with UUID4 `id` and `token`
-3. Writes startup files (gitignored under `startup/`):
+1. `run.sh` ensures the local master-key file exists, then exports it as `SOIDIED_MASTER_KEY`
+2. Bootstrap creates SQLite tables if missing (`database.db`)
+3. Bootstrap ensures exactly one **actual user** (`is_actual_user=true`) with UUID4 `id` and `token`
+4. Bootstrap writes startup files (gitignored under `startup/`):
    - `startup/actual_user.md` — credentials only
    - `startup/api.txt` — credentials plus documented API routes (served by `GET /api/v1/utils/api`)
+   - `startup/.soidied_master_key` — local master encryption key created by `run.sh`
 
 Configure paths in `config.yaml`:
 
@@ -86,6 +88,24 @@ Edit `config.yaml` for log level, defences, email provider, and actions.
 For **local API testing**, set `settings.dark_mode: false`. When `dark_mode` is `true`, protected routes return 404.
 
 ### 2. Start the API server
+
+On Linux/macOS, prefer `run.sh` so the app starts with a persistent local master key:
+
+```bash
+./run.sh
+```
+
+If `startup/.soidied_master_key` does not exist, the script creates it with a strong random value and file mode `600`. On later starts, it reuses that file and exports it as `SOIDIED_MASTER_KEY` before running `api.py`.
+
+You can override paths or Python executable when needed:
+
+```bash
+SOIDIED_MASTER_KEY_FILE=/secure/path/soidied.key SOIDIED_PYTHON=python ./run.sh
+```
+
+If `SOIDIED_MASTER_KEY` is already set and the key file is missing or empty, `run.sh` writes the current environment value to the key file, then uses the file as the source of truth.
+
+Direct startup still works, but it will not create/export the master key:
 
 ```bash
 python api.py
@@ -152,9 +172,25 @@ Tests set `SOIDIED_SKIP_BOOTSTRAP=1` and use an in-memory database; they do not 
 
 1. Install requirements (virtualenv + `pip install -r requirements.txt`)
 2. Set `settings.dark_mode: false` in `config.yaml` for local dev (optional)
-3. Run `python api.py`
+3. Run `./run.sh` on Linux/macOS, or `python api.py` if you are not using the local key wrapper
 4. Open `startup/actual_user.md` or call `GET /api/v1/utils/api`
 5. Run `pytest -v` when validating changes
+
+---
+
+## Local master key and crypto-shredding
+
+`run.sh` manages a reusable local master key at `startup/.soidied_master_key`. The `startup/` directory is gitignored, so the key is not committed with the repository.
+
+This key is intended for encrypted-at-rest data. When encryption is wired into a feature, the app can decrypt data while `SOIDIED_MASTER_KEY` is available to the running process. Deleting the key file makes data encrypted with that key practically unrecoverable, even if encrypted database rows, files, or backups remain.
+
+Important operational notes:
+
+- Back up the key only if you intentionally want encrypted data to survive host loss.
+- Protect the key file with filesystem permissions; `run.sh` sets mode `600`.
+- Do not copy the key into docs, logs, commits, issue comments, or chat.
+- Deleting the key is destructive for any data encrypted with it. Treat key deletion as crypto-shredding.
+- If the key file exists, it wins over a different `SOIDIED_MASTER_KEY` value in the environment. Remove or replace the file intentionally if you need to rotate keys.
 
 ---
 
@@ -163,6 +199,8 @@ Tests set `SOIDIED_SKIP_BOOTSTRAP=1` and use an in-memory database; they do not 
 | Problem | Likely cause | What to try |
 |---------|----------------|-------------|
 | `ModuleNotFoundError` | Venv not activated or deps not installed | Activate venv; `pip install -r requirements.txt` |
+| `./run.sh: Permission denied` | Script is not executable on your checkout | Run `chmod +x run.sh`, then `./run.sh` |
+| `SOIDIED_MASTER_KEY is empty` | Key file exists but is empty and no key could be loaded | Delete `startup/.soidied_master_key` and rerun `./run.sh`, or set `SOIDIED_MASTER_KEY` first |
 | `create_db.py is for internal use only` | Ran DB script manually | Use `python api.py` instead |
 | All API routes return 404 | `dark_mode: true` in config | Set `dark_mode: false` for local testing |
 | `no such table: users` | Old or missing database | Delete `database.db`; restart `python api.py` |
