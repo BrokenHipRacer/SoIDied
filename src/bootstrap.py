@@ -5,6 +5,8 @@ from flask import Flask
 from src.db.schema import create_schema
 from src.tools.actual_user import initialize_actual_user
 from src.tools.message_files import prepare_message_upload_folder
+from src.tools.settings import Settings
+from src.tools.tls import provision_tls
 
 INTERNAL_ENV = 'SOIDIED_INTERNAL'
 
@@ -25,6 +27,16 @@ def _print_actual_user_credentials(user) -> None:
     print('=' * 60)
 
 
+def _provision_tls_quietly() -> None:
+    """Generate the self-signed cert at startup if TLS is enabled; never block bootstrap."""
+    try:
+        provision_tls(Settings())
+    except FileNotFoundError:
+        pass
+    except Exception as exc:  # noqa: BLE001 — TLS provisioning must not crash startup
+        print(f'[TLS] certificate provisioning skipped: {exc}')
+
+
 def bootstrap_app(app: Flask) -> None:
     """Create schema, ensure actual user exists, and write startup files."""
     if app.config.get('TESTING') or not should_bootstrap():
@@ -38,6 +50,7 @@ def bootstrap_app(app: Flask) -> None:
             create_schema()
             user = initialize_actual_user()
             _print_actual_user_credentials(user)
+        _provision_tls_quietly()
     finally:
         if previous is None:
             os.environ.pop(INTERNAL_ENV, None)

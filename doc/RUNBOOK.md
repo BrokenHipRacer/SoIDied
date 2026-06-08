@@ -111,7 +111,7 @@ Direct startup still works, but it will not create/export the master key:
 python api.py
 ```
 
-Default URL: [http://127.0.0.1:5000](http://127.0.0.1:5000)
+Default URL: [http://127.0.0.1:5000](http://127.0.0.1:5000) (or `https://localhost:5000` when `tls.enabled: true` — see [Serving over HTTPS (TLS)](#serving-over-https-tls)).
 
 Read credentials from `startup/actual_user.md` or `startup/api.txt`, or call `GET /api/v1/utils/api` with your `id` and `token` (see below).
 
@@ -147,6 +147,60 @@ curl -X GET http://127.0.0.1:5000/api/v1/utils/api ^
 ```
 
 On Linux/macOS, use `\` for line continuation or send JSON on one line.
+
+### Serving over HTTPS (TLS)
+
+By default the server runs plain HTTP. To encrypt the wire (so a sniffer such as Wireshark cannot read the `id`/`token` payload), enable TLS in `config.yaml`:
+
+```yaml
+tls:
+  enabled: true
+  host: 127.0.0.1
+  port: 5000
+  cert_file: certs/cert.pem
+  key_file: certs/key.pem
+  common_name: localhost
+  auto_generate: true
+  valid_days: 825
+  hsts: true
+```
+
+With `auto_generate: true`, starting the app (`python api.py`) generates a self-signed certificate at `cert_file`/`key_file` on first run and prints its **SHA-256 fingerprint**. Pin that fingerprint in your client (curl/DuckyScript/Postman) to defeat man-in-the-middle attacks — a self-signed cert is not trusted by a public CA, so verification relies on the pin, not the CA chain.
+
+The `certs/` directory and `*.pem`/`*.key` files are gitignored; never commit them.
+
+Calling endpoints once TLS is on (verify against the generated cert with `--cacert certs/cert.pem`; same routes as the HTTP examples above, just `https://`):
+
+```bash
+# Register a check-in:
+curl --cacert certs/cert.pem -X PUT https://localhost:5000/api/v1/checkin ^
+  -H "Content-Type: application/json" ^
+  -d "{\"id\": \"<user-uuid>\", \"token\": \"<access-token-uuid>\"}"
+
+# Check-in status:
+curl --cacert certs/cert.pem -X GET https://localhost:5000/api/v1/checkin/status ^
+  -H "Content-Type: application/json" ^
+  -d "{\"id\": \"<user-uuid>\", \"token\": \"<access-token-uuid>\"}"
+
+# Startup API file (actual user only):
+curl --cacert certs/cert.pem -X GET https://localhost:5000/api/v1/utils/api ^
+  -H "Content-Type: application/json" ^
+  -d "{\"id\": \"<user-uuid>\", \"token\": \"<access-token-uuid>\"}"
+
+# Health check:
+curl --cacert certs/cert.pem https://localhost:5000/
+
+# For a quick local test you can skip verification with -k (NOT for production):
+curl -k -X GET https://localhost:5000/api/v1/checkin/status ^
+  -H "Content-Type: application/json" ^
+  -d "{\"id\": \"<user-uuid>\", \"token\": \"<access-token-uuid>\"}"
+```
+
+Notes:
+- `port: 443` typically requires elevated privileges; the default `5000` does not.
+- HTTPS responses include a `Strict-Transport-Security` header when `hsts: true`.
+- For a public deployment behind a reverse proxy (nginx/Caddy) terminating TLS instead, leave `tls.enabled: false` and let the proxy handle certificates.
+- To regenerate the cert, delete the files in `certs/` and restart the app.
 
 ### 3. Start the main process (config loader)
 

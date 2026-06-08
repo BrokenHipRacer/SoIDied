@@ -21,6 +21,19 @@ settings:
   message_upload_folder: startup/message_files
     ## created on startup and cleared on every app start/restart; stores uploaded message attachments
 
+# Transport security (HTTPS). Encrypts the wire so a sniffer (e.g. Wireshark) cannot read
+# the id/token payload. Pair with client-side certificate pinning of the self-signed cert.
+tls:
+  enabled: false # if true, the dev server serves HTTPS using the cert/key below
+  host: 127.0.0.1 # bind address (use 0.0.0.0 to expose on the network)
+  port: 5000 # HTTPS listen port (443 typically needs elevated privileges)
+  cert_file: certs/cert.pem # PEM certificate path
+  key_file: certs/key.pem # PEM private key path (gitignored, never commit)
+  common_name: localhost # CN/SAN baked into the auto-generated cert
+  auto_generate: true # if true, a self-signed cert is created at startup when missing
+  valid_days: 825 # validity period for an auto-generated cert
+  hsts: true # send Strict-Transport-Security on HTTPS responses
+
 email:
   provider: AmazonSES # options: AmazonSES, SendGrid, Mailgun, Googlemail,
   alert_email: blank@blank.blank # where to send alerts to
