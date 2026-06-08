@@ -224,13 +224,19 @@ When extending the codebase:
 
 ## Cursor Cloud specific instructions
 
-### VM prerequisites
+### Environment config
 
-Ubuntu/Debian cloud VMs need the `python3.12-venv` system package before `python3 -m venv` works (`sudo apt-get install -y python3.12-venv`). This is a one-time image/snapshot concern, not part of the repo update script.
+Cloud Agents use [`.cursor/environment.json`](.cursor/environment.json):
+
+- **Dockerfile** (`.cursor/Dockerfile`) installs `python3`, `python3-pip`, `python3-venv`, and `curl` on Ubuntu 24.04.
+- **`install`** (update script on each session) creates/refreshes `venv/` and runs `pip install -r requirements.txt`.
+- **`terminals.api`** starts `./venv/bin/python api.py` on port 5000.
+
+Manual `apt-get install python3.12-venv` is only needed on bare VMs without this Dockerfile.
 
 ### Dependency refresh
 
-After the update script runs, activate the venv before Python commands:
+After `install` runs, activate the venv before Python commands:
 
 ```bash
 source venv/bin/activate
