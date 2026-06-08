@@ -32,7 +32,7 @@ This system handles sensitive post-mortem notifications and data deletion. **Use
 ## Quick Start
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.10+
 - Windows/Linux/macOS
 
 ### Installation
