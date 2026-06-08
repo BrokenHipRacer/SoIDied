@@ -12,6 +12,7 @@ and TLS is disabled.
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 
 DEFAULT_CERT_FILE = 'certs/cert.pem'
@@ -20,6 +21,12 @@ DEFAULT_COMMON_NAME = 'localhost'
 DEFAULT_VALID_DAYS = 825
 DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 5000
+LOOPBACK_HOSTS = {'127.0.0.1', '::1', 'localhost', ''}
+
+
+def _is_loopback_host(host: str) -> bool:
+    """True when the bind address only accepts connections from this machine."""
+    return str(host).strip().lower() in LOOPBACK_HOSTS
 
 
 def _tls(settings) -> dict:
@@ -36,6 +43,42 @@ def cert_paths(settings) -> tuple[str, str]:
         str(tls.get('cert_file', DEFAULT_CERT_FILE)),
         str(tls.get('key_file', DEFAULT_KEY_FILE)),
     )
+
+
+def _restrict_key_permissions(key_path: str | Path) -> None:
+    """Lock the private key to the current user across operating systems.
+
+    POSIX: chmod 0600. Windows: drop inherited ACEs and grant the current user only,
+    via the built-in ``icacls`` (no extra dependency). Never raises — a key that cannot
+    be locked is reported but must not crash startup.
+    """
+    key_path = str(key_path)
+
+    if os.name == 'posix':
+        try:
+            os.chmod(key_path, 0o600)
+        except OSError as exc:
+            print(f'[TLS] could not chmod key file {key_path}: {exc}')
+        return
+
+    if os.name == 'nt':
+        user = os.environ.get('USERNAME') or os.environ.get('USER')
+        if not user:
+            print(f'[TLS] key file {key_path} left with default ACLs (no USERNAME env).')
+            return
+        try:
+            subprocess.run(
+                ['icacls', key_path, '/inheritance:r', '/grant:r', f'{user}:F'],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            detail = getattr(exc, 'stderr', '') or exc
+            print(f'[TLS] could not restrict key file {key_path} via icacls: {detail}')
+        return
+
+    print(f'[TLS] unknown OS ({os.name}); key file {key_path} permissions not restricted.')
 
 
 def generate_self_signed_cert(
@@ -106,10 +149,7 @@ def generate_self_signed_cert(
         )
     )
     cert_path.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
-    try:
-        os.chmod(key_path, 0o600)
-    except (OSError, NotImplementedError):
-        pass
+    _restrict_key_permissions(key_path)
 
     return (str(cert_path), str(key_path))
 
@@ -181,9 +221,15 @@ def resolve_run_options(settings) -> dict:
     cert_path, key_path = cert_paths(settings)
     if os.path.exists(cert_path) and os.path.exists(key_path):
         tls = _tls(settings)
+        host = str(tls.get('host', DEFAULT_HOST))
         options['ssl_context'] = (cert_path, key_path)
-        options['host'] = str(tls.get('host', DEFAULT_HOST))
+        options['host'] = host
         options['port'] = int(tls.get('port', DEFAULT_PORT))
+        if debug and not _is_loopback_host(host):
+            print(f'[TLS] SECURITY: forcing debug off — refusing to run the Werkzeug '
+                  f'debugger (remote code execution) on a network-exposed bind ({host}). '
+                  f'debug=true is only honored on loopback addresses.')
+            options['debug'] = False
     else:
         print('[TLS] enabled but certificate/key missing; serving plain HTTP. '
               'Start via bootstrap (python api.py) or set tls.auto_generate: true.')

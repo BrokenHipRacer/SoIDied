@@ -144,6 +144,29 @@ def test_run_options_debug_defaults_off_when_unset():
     assert options['debug'] is False
 
 
+def test_run_options_debug_forced_off_on_nonloopback_bind(tmp_path):
+    cert = tmp_path / 'cert.pem'
+    key = tmp_path / 'key.pem'
+    base = {'enabled': True, 'cert_file': str(cert), 'key_file': str(key), 'host': '0.0.0.0'}
+    tls.ensure_certificate(_settings(base))
+
+    options = tls.resolve_run_options({'tls': base, 'settings': {'debug': True}})
+
+    assert options['host'] == '0.0.0.0'
+    assert options['debug'] is False
+
+
+def test_run_options_debug_kept_on_loopback_tls(tmp_path):
+    cert = tmp_path / 'cert.pem'
+    key = tmp_path / 'key.pem'
+    base = {'enabled': True, 'cert_file': str(cert), 'key_file': str(key), 'host': '127.0.0.1'}
+    tls.ensure_certificate(_settings(base))
+
+    options = tls.resolve_run_options({'tls': base, 'settings': {'debug': True}})
+
+    assert options['debug'] is True
+
+
 def test_certificate_fingerprint_format(tmp_path):
     cert = tmp_path / 'cert.pem'
     key = tmp_path / 'key.pem'
@@ -156,6 +179,60 @@ def test_certificate_fingerprint_format(tmp_path):
     assert len(parts) == 32  # SHA-256 = 32 bytes
     assert all(len(part) == 2 for part in parts)
     assert fingerprint == fingerprint.upper()
+
+
+@pytest.mark.skipif(os.name != 'posix', reason='POSIX file mode only')
+def test_key_file_is_chmod_600_on_posix(tmp_path):
+    cert = tmp_path / 'cert.pem'
+    key = tmp_path / 'key.pem'
+    tls.ensure_certificate(
+        _settings({'enabled': True, 'cert_file': str(cert), 'key_file': str(key)})
+    )
+
+    mode = key.stat().st_mode & 0o777
+    assert mode == 0o600
+
+
+def test_restrict_key_permissions_uses_icacls_on_windows(tmp_path, monkeypatch):
+    key = tmp_path / 'key.pem'
+    key.write_text('dummy')
+    calls = []
+
+    monkeypatch.setattr(tls.os, 'name', 'nt')
+    monkeypatch.setenv('USERNAME', 'tester')
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+
+        class _R:
+            returncode = 0
+        return _R()
+
+    monkeypatch.setattr(tls.subprocess, 'run', fake_run)
+
+    tls._restrict_key_permissions(str(key))
+
+    assert calls, 'expected icacls to be invoked on Windows'
+    cmd = calls[0]
+    assert cmd[0] == 'icacls'
+    assert str(key) in cmd
+    assert '/inheritance:r' in cmd
+    assert 'tester:F' in cmd
+
+
+def test_restrict_key_permissions_never_raises_on_icacls_failure(tmp_path, monkeypatch):
+    key = tmp_path / 'key.pem'
+    key.write_text('dummy')
+
+    monkeypatch.setattr(tls.os, 'name', 'nt')
+    monkeypatch.setenv('USERNAME', 'tester')
+
+    def boom(cmd, **kwargs):
+        raise tls.subprocess.CalledProcessError(1, cmd, stderr='denied')
+
+    monkeypatch.setattr(tls.subprocess, 'run', boom)
+
+    tls._restrict_key_permissions(str(key))  # must not raise
 
 
 class _FakeHeaders(dict):
