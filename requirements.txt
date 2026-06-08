@@ -13,7 +13,7 @@ Jinja2==3.1.6
 MarkupSafe==3.0.3
 pycparser==3.0
 pytest==9.0.3
-pytz==2025.2
+pytz==2026.2
 PyYAML==6.0.3
 ruff==0.15.16
 six==1.17.0
