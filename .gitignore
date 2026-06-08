@@ -68,6 +68,11 @@ startup/
 database.db
 instance/database.db
 
+# TLS certificates / private keys (never commit)
+certs/
+*.pem
+*.key
+
 # Scrapy stuff:
 .scrapy
 

@@ -1,0 +1,68 @@
+Peer Review (self) - 2026-06-08
+Branch: tls-support
+Commit: ff97f31 - Add optional HTTPS/TLS transport security
+Reviewer: author self-review
+
+Scope:
+- src/tools/tls.py (cert generation, fingerprint, run-option resolution, HSTS helper)
+- api.py (after_request HSTS, ssl_context wiring into app.run)
+- src/bootstrap.py (_provision_tls_quietly startup hook)
+- config.yaml (tls block, disabled by default)
+- .gitignore (certs/, *.pem, *.key)
+- doc/RUNBOOK.md (HTTPS usage + curl examples)
+- test/test_tls.py
+
+Findings:
+
+1. Medium - HSTS is never sent in the recommended reverse-proxy deployment.
+   apply_hsts() returns early unless is_tls_enabled(settings) is true. The runbook
+   recommends terminating TLS at a proxy with tls.enabled: false. In that mode HSTS
+   is silently never emitted, even though the connection to the client is HTTPS.
+   Additionally, when this app terminates TLS behind a proxy, request.is_secure is
+   false without ProxyFix/X-Forwarded-Proto handling, so HSTS would still be skipped.
+
+2. Medium - debug default changed from always-on to config-driven (silent behavior change).
+   Previously api.py ran app.run(debug=True). resolve_run_options now derives debug
+   from settings.settings.debug (default false), so the Werkzeug reloader/debugger is
+   off by default. This is the safer default once exposed over TLS, but it is an
+   unannounced change that will surprise anyone relying on auto-reload during dev.
+
+3. Low/Medium - private key file permissions are not enforced on Windows.
+   generate_self_signed_cert() chmod 0o600 is best-effort and swallows
+   NotImplementedError. On Windows (the current dev OS) the key inherits default ACLs
+   and may be readable by other local users. Consider an explicit Windows ACL step or
+   at minimum document the risk.
+
+4. Low - host/port are ignored unless TLS is enabled (and silently dropped on fallback).
+   resolve_run_options returns only {debug} when TLS is disabled, so tls.host/tls.port
+   apply only to HTTPS. If TLS is enabled but the cert is missing, it falls back to
+   plain HTTP and also drops host/port, so a user expecting 0.0.0.0 exposure gets a
+   localhost bind with no clear signal beyond a printed line.
+
+5. Low - redundant Settings() load and inconsistent fallback in api.py.
+   _settings = Settings() runs at import (in addition to bootstrap's own load). The
+   __main__ guard then calls resolve_run_options(_settings or Settings()); if the first
+   load failed with FileNotFoundError (caught -> None), the fallback re-instantiates
+   Settings() and would raise the very error that was guarded against.
+
+6. Low - HSTS on localhost can be a developer footgun.
+   Sending Strict-Transport-Security from a self-signed localhost server can cause
+   browsers to pin HTTPS for localhost, breaking later plain-HTTP local work. Fine for
+   API/curl use; worth a note for browser testing.
+
+7. Low - implicit dependency on cryptography not introduced by this change.
+   tls.py imports cryptography (lazily). It already exists in requirements.txt from the
+   message-encryption feature, so this commit did not add it. If encryption is ever
+   removed, TLS auto-generation breaks. The dependency should be considered shared.
+
+Verification performed:
+- python -m pytest
+- Result: 60 passed
+
+Main missing test coverage:
+- src/bootstrap.py _provision_tls_quietly integration (enabled, disabled, cryptography
+  missing -> must not crash bootstrap)
+- api.py after_request HSTS wiring end-to-end (secure vs insecure request)
+- resolve_run_options fallback path when enabled but cert/key missing (host/port drop)
+- Reverse-proxy HSTS expectation (X-Forwarded-Proto / proxy-terminated TLS)
+- Windows key-file permission behavior
