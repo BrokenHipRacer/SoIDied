@@ -1,0 +1,21 @@
+{
+  "name": "soidied-dev",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "install": "python3 -m venv venv\n./venv/bin/pip install --upgrade pip\n./venv/bin/pip install -r requirements.txt",
+  "ports": [
+    {
+      "name": "flask-api",
+      "port": 5000
+    }
+  ],
+  "terminals": [
+    {
+      "name": "api",
+      "command": "./venv/bin/python api.py",
+      "description": "Flask API on http://127.0.0.1:5000"
+    }
+  ]
+}
