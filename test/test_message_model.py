@@ -13,6 +13,7 @@ def test_message_model_persists_requested_fields():
             recipient='alex@example.com',
             message='This is the message body.',
             file_path='/safe/storage/attachment.pdf',
+            file_ext='.pdf',
         )
         db.session.add(message)
         db.session.commit()
@@ -24,6 +25,7 @@ def test_message_model_persists_requested_fields():
         assert saved.recipient == 'alex@example.com'
         assert saved.message == 'This is the message body.'
         assert saved.file_path == '/safe/storage/attachment.pdf'
+        assert saved.file_ext == '.pdf'
         assert saved.to_dict() == {
             'id': 1,
             'network_name': 'email',
@@ -31,6 +33,7 @@ def test_message_model_persists_requested_fields():
             'message': 'This is the message body.',
             'file_path': '/safe/storage/attachment.pdf',
             'file': True,
+            'file_ext': '.pdf',
         }
 
         db.session.remove()

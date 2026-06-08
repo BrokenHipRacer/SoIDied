@@ -8,7 +8,7 @@ from werkzeug.datastructures import MultiDict
 from api import app, db
 from src.models.message import Message
 from src.models.user import User
-from src.tools.message_files import prepare_message_upload_folder
+from src.tools.message_files import prepare_message_upload_folder, read_message_attachment
 
 MESSAGES_ADD_URL = '/api/v1/messages/add'
 
@@ -20,6 +20,7 @@ def client(tmp_path, monkeypatch):
         'src.tools.message_files.message_upload_folder_path',
         lambda settings=None: upload_folder,
     )
+    monkeypatch.setenv('SOIDIED_MASTER_KEY', 'test-master-key')
 
     app.config['TESTING'] = True
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
@@ -79,9 +80,13 @@ def test_message_upload_fans_out_rows_and_reuses_one_file(client, main_auth):
     assert len(file_paths) == 1
     saved_path = Path(next(iter(file_paths)))
     assert saved_path.parent == upload_folder
+    assert saved_path.name.endswith('.txt.enc')
     assert saved_path.is_file()
-    assert saved_path.read_bytes() == b'attachment contents'
+    assert saved_path.read_bytes() != b'attachment contents'
+    assert read_message_attachment(str(saved_path)) == b'attachment contents'
+    assert {message.file_ext for message in saved} == {'.txt'}
     assert all(message_dict['file'] is True for message_dict in data['messages'])
+    assert all(message_dict['file_ext'] == '.txt' for message_dict in data['messages'])
 
 
 def test_message_upload_accepts_repeated_recipient_fields_without_file(client, main_auth):
@@ -248,8 +253,32 @@ def test_message_upload_sanitizes_attachment_filename(client, main_auth):
     assert saved_path.parent == upload_folder
     assert '..' not in saved_path.name
     assert '/' not in saved_path.name
-    assert saved_path.name.endswith('_secret.txt')
-    assert saved_path.read_bytes() == b'attachment'
+    assert saved_path.name.endswith('_secret.txt.enc')
+    assert saved.file_ext == '.txt'
+    assert saved_path.read_bytes() != b'attachment'
+    assert read_message_attachment(str(saved_path)) == b'attachment'
+
+
+def test_message_upload_with_file_requires_master_key(client, main_auth, monkeypatch):
+    test_client, upload_folder = client
+    monkeypatch.delenv('SOIDIED_MASTER_KEY', raising=False)
+
+    response = test_client.post(
+        MESSAGES_ADD_URL,
+        data={
+            **main_auth,
+            'network': 'email',
+            'recipients': json.dumps(['alex@example.com']),
+            'message': 'Should not save without a key.',
+            'file': (io.BytesIO(b'should not save'), 'payload.txt'),
+        },
+        content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 500
+    assert 'SOIDIED_MASTER_KEY is required' in response.get_json()['message']
+    assert Message.query.count() == 0
+    assert _folder_entries(upload_folder) == []
 
 
 def test_prepare_message_upload_folder_clears_previous_runtime_files(tmp_path):

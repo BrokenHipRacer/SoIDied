@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import shutil
 import uuid
 from pathlib import Path
@@ -5,9 +6,16 @@ from pathlib import Path
 from werkzeug.datastructures import FileStorage
 from werkzeug.utils import secure_filename
 
+from src.tools.encryption import decrypt_bytes, encrypt_bytes
 from src.tools.settings import Settings
 
 DEFAULT_MESSAGE_UPLOAD_FOLDER = 'startup/message_files'
+
+
+@dataclass(frozen=True)
+class SavedAttachment:
+    file_path: str
+    file_ext: str | None
 
 
 def _reject_unsafe_upload_folder(path: Path) -> None:
@@ -54,13 +62,19 @@ def prepare_message_upload_folder(settings: Settings | None = None) -> Path:
 def save_message_attachment(
     attachment: FileStorage | None,
     settings: Settings | None = None,
-) -> str | None:
+) -> SavedAttachment | None:
     if attachment is None or not attachment.filename:
         return None
 
     upload_folder = ensure_message_upload_folder(settings)
     filename = secure_filename(attachment.filename) or 'attachment'
-    storage_name = f'{uuid.uuid4().hex}_{filename}'
+    file_ext = Path(filename).suffix or None
+    storage_name = f'{uuid.uuid4().hex}_{filename}.enc'
     path = upload_folder / storage_name
-    attachment.save(path)
-    return str(path)
+    encrypted = encrypt_bytes(attachment.read())
+    path.write_bytes(encrypted)
+    return SavedAttachment(file_path=str(path), file_ext=file_ext)
+
+
+def read_message_attachment(file_path: str) -> bytes:
+    return decrypt_bytes(Path(file_path).read_bytes())

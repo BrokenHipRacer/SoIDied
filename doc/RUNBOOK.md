@@ -182,7 +182,7 @@ Tests set `SOIDIED_SKIP_BOOTSTRAP=1` and use an in-memory database; they do not 
 
 `run.sh` manages a reusable local master key at `startup/.soidied_master_key`. The `startup/` directory is gitignored, so the key is not committed with the repository.
 
-This key is intended for encrypted-at-rest data. When encryption is wired into a feature, the app can decrypt data while `SOIDIED_MASTER_KEY` is available to the running process. Deleting the key file makes data encrypted with that key practically unrecoverable, even if encrypted database rows, files, or backups remain.
+This key is used for encrypted-at-rest message attachments. The app can decrypt attachment data while `SOIDIED_MASTER_KEY` is available to the running process. Deleting the key file makes data encrypted with that key practically unrecoverable, even if encrypted files or backups remain.
 
 Important operational notes:
 

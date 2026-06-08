@@ -115,7 +115,7 @@
       - `network`: The network/provider name, such as `email`, `Facebook`, `discord`, or `Twitter`.
       - `recipients`: Array of recipient strings. Send as a JSON array string (for example `["a@example.com","b@example.com"]`) or repeat the `recipients` form field.
       - `message`: The content of the message to add.
-      - `file`: Optional file to attach to the message. Runtime files are stored under `settings.message_upload_folder` (default `startup/message_files`), which is created and cleared every app start/restart.
+      - `file`: Optional file to attach to the message. Runtime files are encrypted with `SOIDIED_MASTER_KEY` before they are stored under `settings.message_upload_folder` (default `startup/message_files`), which is created and cleared every app start/restart.
   - **RESPONSE**:
     - `http code`
     - JSON object containing `count` and a `messages` array. Each message has:
@@ -123,7 +123,8 @@
       - `network_name`: The network/provider name.
       - `recipient`: One recipient string.
       - `message`: The content of the message.
-      - `file_path`: The saved file path, or `null`.
+      - `file_path`: The saved encrypted file path, or `null`.
+      - `file_ext`: The original attachment extension, such as `.txt`, or `null`.
       - `file`: Boolean indicating whether a file is attached.
 
 

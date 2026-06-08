@@ -59,13 +59,18 @@ class MessageUpload(Resource):
         if recipients_error:
             return recipients_error, 400
 
-        file_path = save_message_attachment(request.files.get('file'), Settings())
+        try:
+            attachment = save_message_attachment(request.files.get('file'), Settings())
+        except RuntimeError as exc:
+            return {'message': str(exc)}, 500
+
         messages = [
             Message(
                 network_name=network,
                 recipient=recipient,
                 message=message_text,
-                file_path=file_path,
+                file_path=attachment.file_path if attachment else None,
+                file_ext=attachment.file_ext if attachment else None,
             )
             for recipient in recipients
         ]

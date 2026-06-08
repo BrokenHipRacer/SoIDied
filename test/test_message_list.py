@@ -40,7 +40,8 @@ def test_message_list_returns_metadata_without_file_paths(client, main_auth):
             network_name='email',
             recipient='alex@example.com',
             message='Email message.',
-            file_path='startup/message_files/shared-note.txt',
+            file_path='startup/message_files/shared-note.txt.enc',
+            file_ext='.txt',
         ),
         Message(
             network_name='discord',
@@ -95,7 +96,8 @@ def test_message_list_alias_returns_same_metadata(client, main_auth):
         network_name='email',
         recipient='alex@example.com',
         message='Email message.',
-        file_path='startup/message_files/shared-note.pdf',
+        file_path='startup/message_files/shared-note.pdf.enc',
+        file_ext='.pdf',
     )
     db.session.add(message)
     db.session.commit()
