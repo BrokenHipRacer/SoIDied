@@ -145,7 +145,7 @@ def test_startup_route_lines_match_rotation(routing_app, main_user):
     lines = get_active_route_lines()
     assert lines != canonical_route_lines()
     for line in lines:
-        assert line.startswith(('PUT ', 'GET '))
+        assert line.startswith(('PUT ', 'GET ', 'POST '))
 
 
 def test_write_api_startup_file_uses_rotated_paths(routing_app, main_user, tmp_path, monkeypatch):

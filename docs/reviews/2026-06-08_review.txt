@@ -1,0 +1,36 @@
+Peer Review - 2026-06-08
+Branch: cursor/messages-ada3
+
+Scope:
+- Message model and multipart upload API
+- Message metadata list endpoints
+- Message attachment storage/cleanup behavior
+- Local startup master-key wrapper
+- Related documentation and tests
+
+Findings:
+
+1. High - master key is not used for encryption yet.
+   run.sh exports SOIDIED_MASTER_KEY, but messages are still stored as plaintext DB text and attachments are saved directly to disk. Deleting the key currently does not crypto-shred existing messages/files. If that is expected behavior, encryption still needs to be wired in.
+
+2. High - restart clears attachment files but leaves DB rows claiming files exist.
+   Bootstrap clears the upload folder on startup, but message rows and file_path values remain. The list serializer reports file=true from file_path alone. After restart, an attachment can be deleted while the API still reports it as attached.
+
+3. Medium - uploaded file can be orphaned if DB commit fails.
+   The file is saved before DB commit. If commit fails, the uploaded file remains on disk with no DB row unless cleanup/rollback logic is added.
+
+4. Low - run.sh is sensitive to caller working directory.
+   KEY_FILE defaults to a relative path and api.py is executed as a relative path. Running /path/to/repo/run.sh from another directory can create the key in the wrong place or fail to locate api.py.
+
+5. Low - runbook wording is slightly misleading.
+   The runbook lists startup/.soidied_master_key under Bootstrap startup files, but that file is created by run.sh, not Flask bootstrap.
+
+Verification performed:
+- python3 -m pytest
+- Result: 45 passed
+
+Main missing test coverage:
+- Restart with existing message rows plus cleared attachment folder
+- DB commit failure after file save
+- run.sh invoked from outside repo root
+- Future encryption/key deletion behavior once encryption is implemented

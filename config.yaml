@@ -18,6 +18,8 @@ settings:
     ## written on startup with the actual user's id and token (also included in api_startup_file)
   api_startup_file: startup/api.txt
     ## written on startup; served via GET /api/v1/utils/api
+  message_upload_folder: startup/message_files
+    ## created on startup and cleared on every app start/restart; stores uploaded message attachments
 
 email:
   provider: AmazonSES # options: AmazonSES, SendGrid, Mailgun, Googlemail,

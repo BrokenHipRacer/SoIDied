@@ -4,6 +4,7 @@ from flask_restful import Api
 from src.api.routing import bind_restful_api, init_api_routes
 from src.bootstrap import bootstrap_app
 from src.db.extensions import db
+from src.models.message import Message  # noqa: F401 — register model with SQLAlchemy
 from src.models.user import User  # noqa: F401 — register model with SQLAlchemy
 
 app = Flask(__name__)

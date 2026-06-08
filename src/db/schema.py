@@ -11,6 +11,7 @@ def create_schema() -> None:
 
 def run_standalone_schema_init(database_uri: str = DEFAULT_DATABASE_URI) -> None:
     """Create tables using a minimal Flask app (no api import or bootstrap)."""
+    import src.models.message  # noqa: F401 — register models with metadata
     import src.models.user  # noqa: F401 — register models with metadata
 
     app = Flask(__name__)
