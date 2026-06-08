@@ -1,5 +1,7 @@
 # SoIDied – Digital Dead Man's Switch
 
+[![Tests](https://github.com/BrokenHipRacer/SoIDied/actions/workflows/tests.yml/badge.svg)](https://github.com/BrokenHipRacer/SoIDied/actions/workflows/tests.yml)
+
 A post-mortem digital notification system that monitors user check-ins and automatically sends pre-configured information to contacts when the user dies or misses scheduled check-ins.
 
 If feeling generous, consider donating to support development: [Buy me a coffee](https://buymeacoffee.com/brokenhipracer)
