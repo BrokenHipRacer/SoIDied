@@ -64,6 +64,7 @@ Starting the application with `run.sh` and Flask **bootstrap**:
    - `startup/actual_user.md` — credentials only
    - `startup/api.txt` — credentials plus documented API routes (served by `GET /api/v1/utils/api`)
    - `startup/.soidied_master_key` — local master encryption key created by `run.sh`
+5. Bootstrap starts the background **check-in tracker** (APScheduler). It polls every `defences.check_in_poll_seconds` (default 60s) and advances the actual user's `missed_check_in_count` once `next_check_in_deadline` passes, so `GET /api/v1/checkin/status` can reach `DEAD` without a manual check. A successful check-in re-freezes the deadline and resets the count; the tracker never lowers it. The tracker is skipped under tests (`SOIDIED_SKIP_BOOTSTRAP=1`).
 
 Configure paths in `config.yaml`:
 

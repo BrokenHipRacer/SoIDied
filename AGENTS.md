@@ -59,10 +59,11 @@ panic_mode = settings['defences']['panic_mode']  # Can be changed without code m
 - **Features**: Dictionary-style access, nested retrieval, safe defaults, key existence checks
 - **Pattern**: All config access should go through Settings instance, never hardcode values
 
-### 1. Check-in Scheduler (APScheduler)
-- **Dependency**: `APScheduler==3.10.4` is installed but NOT YET INTEGRATED
-- **Config Reference**: `defences.check_in_interval` (d/W/M/h/m), `check_in_window`, `check_in_timeout_count`
-- **Pattern**: Build scheduler in `src/tools/` (e.g., `check_in_scheduler.py`) that reads config and triggers death sequence when missed
+### 1. Check-in Scheduler (APScheduler) (IMPLEMENTED)
+- **Location**: `src/tools/check_in_scheduler.py` — a `BackgroundScheduler` started from `bootstrap_app` (gated like other startup side effects; skipped under tests and the reloader's parent process).
+- **Behavior**: On each tick it recomputes the actual user's `missed_check_in_count` from the frozen `next_check_in_deadline`. It is **never-decreasing** (`max(current, computed)`); only a successful check-in resets the count to 0.
+- **Config Reference**: `defences.check_in_interval` (d/W/M/h/m), `check_in_window`, `defences.check_in_poll_seconds` (poll cadence, default 60s).
+- **Still TODO**: reaching `miss_count` advances `Status` to `DEAD`, but the actual death-sequence actions are not yet triggered.
 
 ### 2. Email Provider Abstraction
 - **Config**: `email.provider` (AmazonSES, SendGrid, Mailgun, Googlemail)
@@ -191,15 +192,16 @@ When extending the codebase:
 ## Red Flags & Questions to Ask
 
 ### Implemented (current baseline)
-- **Check-in state** on `User`: `last_check_in`, `missed_check_in_count`, `auth_fail_count`; `id` and `access_token` are UUID4 strings (`id` is unique PK).
+- **Check-in state** on `User`: `last_check_in`, `next_check_in_deadline`, `missed_check_in_count`, `auth_fail_count`; `id` and `access_token` are UUID4 strings (`id` is unique PK). A successful check-in stamps `last_check_in`, freezes `next_check_in_deadline` (= `last_check_in` + interval period), and resets `missed_check_in_count` to 0.
+- **Check-in tracker:** `src/tools/check_in_scheduler.py` runs a background APScheduler job (started in bootstrap) that advances `missed_check_in_count` from the frozen deadline; never-decreasing, config cadence via `defences.check_in_poll_seconds`.
 - **Actual user**: `is_actual_user` (ENDPOINTS “main” user); only one allowed; bootstrap creates one on startup.
 - **API (implemented):** `PUT /api/v1/checkin`, `GET /api/v1/checkin/status`, `GET /api/v1/utils/api` (startup file with credentials + routes).
 - **Auth:** Shared `id`/`token` JSON body via `src/api/auth.py`; failed auth increments `auth_fail_count` only (not missed check-ins).
 - **Startup files:** `startup/actual_user.md`, `startup/api.txt` (gitignored); refreshed on bootstrap.
-- **Tests:** `test/test_check_in.py`, `test/test_actual_user.py` (pytest; set `SOIDIED_SKIP_BOOTSTRAP=1` in conftest).
+- **Tests:** `test/test_check_in.py`, `test/test_check_in_scheduler.py`, `test/test_actual_user.py` (pytest; set `SOIDIED_SKIP_BOOTSTRAP=1` in conftest).
 
 ### Still open
-- ❓ **`missed_check_in_count` is not incremented by a scheduler yet** — overdue check-ins return `Status: ALERT` via deadline math; `DEAD` needs APScheduler (or similar) to bump the counter per `defences.miss_count`.
+- ❓ **Death sequence actions not triggered** — the tracker now advances `missed_check_in_count` to `miss_count` (so `Status: DEAD` is reachable automatically), but reaching `DEAD` does not yet fire `actions.*` (email, delete_data, etc.).
 - ❓ **Death sequence persistence** — no dedicated death-state column or workflow; derived from counters and status logic only.
 - ❓ **Panic mode** — `auth_fail_count` is stored but not wired to `defences.panic_threshold` / lockdown.
 - **Dark mode (rotation)** — `settings.dark_mode: true` rotates paths at boot; `PUT /api/v1/darkmode` enables in-memory rotation for this process only. Canonical paths return 404; `startup/api.txt` lists active secret paths. Response masking (404 on all responses) not implemented yet.

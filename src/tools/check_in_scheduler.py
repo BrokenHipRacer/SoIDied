@@ -1,10 +1,12 @@
 """Background time tracker for check-in timers.
 
 A ``BackgroundScheduler`` (APScheduler) polls on a fixed interval and recomputes the
-actual user's ``missed_check_in_count`` from elapsed wall-clock time. The count is
-*derived* from ``last_check_in`` and the configured check-in period, so the poll is
-idempotent: re-running it never double-counts, and a fresh check-in (which resets
-``last_check_in`` and the count) is honoured on the next tick.
+actual user's ``missed_check_in_count`` from the frozen ``next_check_in_deadline``
+(``last_check_in`` + the configured check-in period). The poll is **never-decreasing**:
+it only ever raises the count (``max`` of the current and computed values), so a poll
+can never walk it back if config or the clock changes. A successful check-in is the
+sole path that resets ``last_check_in``, re-freezes the deadline, and clears the count
+to 0 — which the next tick then honours.
 
 This closes the gap noted in AGENTS.md: ``compute_check_in_status`` could only return
 ``ALERT`` from deadline math, but nothing advanced the counter toward ``DEAD``.
@@ -12,6 +14,7 @@ This closes the gap noted in AGENTS.md: ``compute_check_in_status`` could only r
 
 from __future__ import annotations
 
+import atexit
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -124,6 +127,7 @@ def start_check_in_scheduler(app, settings: Settings | None = None) -> Backgroun
     )
     scheduler.start()
     _scheduler = scheduler
+    atexit.register(stop_check_in_scheduler)
     return scheduler
 
 

@@ -4,6 +4,7 @@ import pytest
 
 from api import app, db
 from src.models.user import User
+from src.tools.check_in import compute_check_in_status
 from src.tools.check_in_scheduler import (
     DEFAULT_POLL_SECONDS,
     compute_missed_count,
@@ -136,6 +137,22 @@ def test_evaluate_returns_none_without_deadline(client, main_user):
 
 def test_evaluate_returns_none_without_actual_user(client):
     assert evaluate_actual_user_check_in() is None
+
+
+def test_tracker_advances_status_to_dead(client, main_user):
+    """End-to-end: an expired deadline is ALERT until the tracker runs, then DEAD."""
+    now = datetime.now(timezone.utc)
+    main_user.last_check_in = now - timedelta(days=8)
+    main_user.next_check_in_deadline = now - timedelta(days=1)
+    main_user.missed_check_in_count = 0
+    db.session.commit()
+
+    assert compute_check_in_status(main_user) == 'ALERT'
+
+    assert evaluate_actual_user_check_in() >= 1
+
+    db.session.refresh(main_user)
+    assert compute_check_in_status(main_user) == 'DEAD'
 
 
 def test_poll_interval_uses_default_when_missing():
