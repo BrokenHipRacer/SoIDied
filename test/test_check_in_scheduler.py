@@ -89,6 +89,12 @@ def test_compute_missed_count_non_positive_period():
     assert compute_missed_count(deadline, now, timedelta(0)) == 0
 
 
+def test_compute_missed_count_exactly_at_deadline():
+    now = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+    deadline = now
+    assert compute_missed_count(deadline, now, _period()) == 0
+
+
 def test_evaluate_raises_missed_count_when_overdue(client, main_user):
     now = datetime.now(timezone.utc)
     main_user.last_check_in = now - timedelta(days=10)
@@ -169,6 +175,53 @@ def test_evaluate_returns_none_without_actual_user(client):
     assert evaluate_actual_user_check_in() is None
 
 
+def test_evaluate_does_not_commit_when_nothing_changes(client, main_user, monkeypatch):
+    now = datetime.now(timezone.utc)
+    main_user.last_check_in = now - timedelta(days=1)
+    main_user.next_check_in_deadline = now + timedelta(days=6)
+    main_user.missed_check_in_count = 0
+    db.session.commit()
+
+    commits = []
+    monkeypatch.setattr(
+        'src.tools.check_in_scheduler.db.session.commit',
+        lambda: commits.append(True),
+    )
+
+    assert evaluate_actual_user_check_in() == 0
+    assert commits == []
+
+
+def test_evaluate_backfill_only_commits_deadline_without_count_change(client, main_user, monkeypatch):
+    now = datetime.now(timezone.utc)
+    main_user.last_check_in = now - timedelta(days=1)
+    main_user.next_check_in_deadline = None
+    main_user.missed_check_in_count = 0
+    db.session.commit()
+
+    commits = []
+    monkeypatch.setattr(
+        'src.tools.check_in_scheduler.db.session.commit',
+        lambda: commits.append(True),
+    )
+
+    assert evaluate_actual_user_check_in() == 0
+    assert commits == [True]
+    assert main_user.next_check_in_deadline is not None
+
+
+def test_tracker_stays_alert_when_missed_count_below_miss_count(client, main_user):
+    now = datetime.now(timezone.utc)
+    main_user.last_check_in = now - timedelta(days=10)
+    main_user.next_check_in_deadline = now - timedelta(hours=1)
+    main_user.missed_check_in_count = 0
+    db.session.commit()
+
+    assert evaluate_actual_user_check_in() == 1
+    db.session.refresh(main_user)
+    assert compute_check_in_status(main_user) == 'ALERT'
+
+
 def test_tracker_advances_status_to_dead(client, main_user):
     """End-to-end: expired deadline is ALERT until tracker reaches miss_count (default 2)."""
     now = datetime.now(timezone.utc)
@@ -205,6 +258,22 @@ def test_poll_interval_rejects_non_positive():
     class _Settings:
         def get(self, key, default=None):
             return {'check_in_poll_seconds': 0}
+
+    assert poll_interval_seconds(_Settings()) == DEFAULT_POLL_SECONDS
+
+
+def test_poll_interval_rejects_invalid_string():
+    class _Settings:
+        def get(self, key, default=None):
+            return {'check_in_poll_seconds': 'not-a-number'}
+
+    assert poll_interval_seconds(_Settings()) == DEFAULT_POLL_SECONDS
+
+
+def test_poll_interval_rejects_negative():
+    class _Settings:
+        def get(self, key, default=None):
+            return {'check_in_poll_seconds': -5}
 
     assert poll_interval_seconds(_Settings()) == DEFAULT_POLL_SECONDS
 
@@ -273,3 +342,83 @@ def test_start_skipped_when_leader_lock_held(client, tmp_path, monkeypatch):
     )
 
     assert start_check_in_scheduler(app) is None
+
+
+def test_start_releases_lock_when_scheduler_start_fails(client, tmp_path, monkeypatch):
+    monkeypatch.delenv('WERKZEUG_RUN_MAIN', raising=False)
+    lock_file = tmp_path / 'scheduler.lock'
+
+    monkeypatch.setattr(
+        'src.tools.check_in_scheduler.scheduler_lock_path',
+        lambda _settings: lock_file,
+    )
+
+    class _BrokenScheduler:
+        def __init__(self, **kwargs):
+            pass
+
+        def add_job(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            raise RuntimeError('scheduler boom')
+
+    monkeypatch.setattr(
+        'src.tools.check_in_scheduler.BackgroundScheduler',
+        _BrokenScheduler,
+    )
+
+    assert start_check_in_scheduler(app) is None
+    assert not lock_file.is_file()
+    assert check_in_scheduler_module._scheduler is None
+
+
+def test_stop_when_not_running_is_safe():
+    stop_check_in_scheduler()
+    assert check_in_scheduler_module._scheduler is None
+
+
+def test_stop_releases_orphan_leader_lock(tmp_path):
+    lock_file = tmp_path / 'orphan.lock'
+    from src.tools.scheduler_leader import try_acquire_scheduler_leadership
+
+    assert try_acquire_scheduler_leadership(lock_file) is True
+    stop_check_in_scheduler()
+    assert not lock_file.is_file()
+
+
+def test_poll_job_removes_session_even_when_evaluate_raises(client, monkeypatch):
+    removes = []
+    monkeypatch.setattr(
+        'src.tools.check_in_scheduler.evaluate_actual_user_check_in',
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError('tick failed')),
+    )
+    monkeypatch.setattr(
+        'src.tools.check_in_scheduler.db.session.remove',
+        lambda: removes.append(True),
+    )
+
+    check_in_scheduler_module._poll_job(app)
+
+    assert removes  # at least once (Flask app context teardown may also remove)
+
+
+def test_poll_job_runs_evaluate_inside_app_context(client, main_user):
+    from flask import has_app_context
+
+    seen = []
+
+    def _record_evaluate():
+        seen.append(has_app_context())
+        return 0
+
+    from src.tools import check_in_scheduler as sched
+
+    original = sched.evaluate_actual_user_check_in
+    sched.evaluate_actual_user_check_in = lambda: _record_evaluate()
+    try:
+        sched._poll_job(app)
+    finally:
+        sched.evaluate_actual_user_check_in = original
+
+    assert seen == [True]

@@ -146,16 +146,22 @@ def start_check_in_scheduler(app, settings: Settings | None = None) -> Backgroun
 
     poll_seconds = poll_interval_seconds(settings)
     scheduler = BackgroundScheduler(daemon=True, timezone='UTC')
-    scheduler.add_job(
-        _poll_job,
-        'interval',
-        seconds=poll_seconds,
-        args=[app],
-        id=JOB_ID,
-        replace_existing=True,
-        next_run_time=datetime.now(timezone.utc),
-    )
-    scheduler.start()
+    try:
+        scheduler.add_job(
+            _poll_job,
+            'interval',
+            seconds=poll_seconds,
+            args=[app],
+            id=JOB_ID,
+            replace_existing=True,
+            next_run_time=datetime.now(timezone.utc),
+        )
+        scheduler.start()
+    except Exception as exc:
+        release_scheduler_leadership()
+        print(f'[scheduler] check-in tracker failed to start: {exc}')
+        return None
+
     _scheduler = scheduler
     if not _atexit_registered:
         atexit.register(stop_check_in_scheduler)

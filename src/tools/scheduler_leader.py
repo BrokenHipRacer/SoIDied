@@ -24,10 +24,14 @@ def scheduler_lock_path(settings) -> Path:
     return Path(configured)
 
 
+def _uses_windows_lock() -> bool:
+    return os.name == 'nt'
+
+
 def _pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
-    if os.name == 'nt':
+    if _uses_windows_lock():
         import ctypes
 
         kernel32 = ctypes.windll.kernel32
@@ -65,6 +69,18 @@ def _remove_stale_lock(path: Path) -> None:
         pass
 
 
+def _try_unix_exclusive_lock(fd: int) -> None:
+    import fcntl
+
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _try_unix_unlock(fd: int) -> None:
+    import fcntl
+
+    fcntl.flock(fd, fcntl.LOCK_UN)
+
+
 def try_acquire_scheduler_leadership(lock_path: Path | str) -> bool:
     """Return True when this process becomes the scheduler leader."""
     global _lock_fd, _lock_path
@@ -75,7 +91,7 @@ def try_acquire_scheduler_leadership(lock_path: Path | str) -> bool:
     path = Path(lock_path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    if os.name == 'nt':
+    if _uses_windows_lock():
         _remove_stale_lock(path)
         try:
             fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
@@ -86,11 +102,9 @@ def try_acquire_scheduler_leadership(lock_path: Path | str) -> bool:
         _lock_path = path
         return True
 
-    import fcntl
-
     fd = os.open(str(path), os.O_CREAT | os.O_RDWR)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _try_unix_exclusive_lock(fd)
     except BlockingIOError:
         os.close(fd)
         return False
@@ -113,11 +127,9 @@ def release_scheduler_leadership() -> None:
     _lock_fd = None
     _lock_path = None
 
-    if os.name != 'nt':
-        import fcntl
-
+    if not _uses_windows_lock():
         try:
-            fcntl.flock(fd, fcntl.LOCK_UN)
+            _try_unix_unlock(fd)
         except OSError:
             pass
 
