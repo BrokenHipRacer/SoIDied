@@ -205,8 +205,8 @@ All requests must include:
 
 **Possible Status Values**:
 - `OK`: User in good standing, no missed check-ins
-- `ALERT`: User has missed 1+ check-ins (within `defences.miss_count` threshold)
-- `DEAD`: User has exceeded `defences.miss_count` threshold - death sequence triggered
+- `ALERT`: User has missed check-in time (deadline passed) but `missed_check_in_count` is still below `defences.miss_count` (default **2**)
+- `DEAD`: `missed_check_in_count` has reached `defences.miss_count` — death sequence should trigger (tracker advances the counter in the background from the frozen `next_check_in_deadline`)
 
 **Notes**:
 - All users can retrieve their status information

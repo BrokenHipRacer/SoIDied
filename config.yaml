@@ -55,7 +55,7 @@ defences:
   crash_and_burn: true # if true, the system will attempt to delete itself after death. Use with caution.
   unlock: false # if true, the system can be unlocked with a password and new data added. Use with caution.
   canary: false # if true, the system will send a canary message to alert service is still alive.
-  miss_count: 1 # number of missed check-ins before triggering death sequence
+  miss_count: 2 # number of missed check-ins before triggering death sequence
   miss_alert: false # if true, the system will send an alert after a missed check-in before triggering the death sequence. Use with caution.
 
   # check-in settings
@@ -64,6 +64,7 @@ defences:
   check_in_timeout_count: 5 # number of extra check-in attempts before triggering panic mode. 0 = no extra attempts. 1 = 1 extra attempt. -1 = infinite attempts.
   check_in_over_attempts: 3 # attempts before triggering panic mode
   check_in_poll_seconds: 60 # how often the background tracker re-evaluates missed check-ins (seconds)
+  check_in_scheduler_lock_file: instance/check_in_scheduler.lock # exclusive lock; one worker runs the tracker
 
   # panic settings
   panic_threshold: 3 # attempts before triggering panic mode

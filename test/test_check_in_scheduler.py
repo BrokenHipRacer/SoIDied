@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from api import app, db
+import src.tools.check_in_scheduler as check_in_scheduler_module
 from src.models.user import User
 from src.tools.check_in import compute_check_in_status
 from src.tools.check_in_scheduler import (
@@ -10,7 +11,23 @@ from src.tools.check_in_scheduler import (
     compute_missed_count,
     evaluate_actual_user_check_in,
     poll_interval_seconds,
+    start_check_in_scheduler,
+    stop_check_in_scheduler,
 )
+from src.tools.scheduler_leader import release_scheduler_leadership
+
+
+@pytest.fixture(autouse=True)
+def _reset_scheduler_state():
+    stop_check_in_scheduler()
+    check_in_scheduler_module._atexit_registered = False
+    check_in_scheduler_module._scheduler = None
+    release_scheduler_leadership()
+    yield
+    stop_check_in_scheduler()
+    check_in_scheduler_module._atexit_registered = False
+    check_in_scheduler_module._scheduler = None
+    release_scheduler_leadership()
 
 
 @pytest.fixture
@@ -126,6 +143,19 @@ def test_evaluate_never_decreases_existing_count(client, main_user):
     assert main_user.missed_check_in_count == 5
 
 
+def test_evaluate_backfills_deadline_from_last_check_in(client, main_user):
+    now = datetime.now(timezone.utc)
+    main_user.last_check_in = now - timedelta(days=1)
+    main_user.next_check_in_deadline = None
+    db.session.commit()
+
+    evaluate_actual_user_check_in()
+
+    db.session.refresh(main_user)
+    assert main_user.next_check_in_deadline is not None
+    assert main_user.next_check_in_deadline > main_user.last_check_in
+
+
 def test_evaluate_returns_none_without_deadline(client, main_user):
     main_user.next_check_in_deadline = None
     db.session.commit()
@@ -140,16 +170,16 @@ def test_evaluate_returns_none_without_actual_user(client):
 
 
 def test_tracker_advances_status_to_dead(client, main_user):
-    """End-to-end: an expired deadline is ALERT until the tracker runs, then DEAD."""
+    """End-to-end: expired deadline is ALERT until tracker reaches miss_count (default 2)."""
     now = datetime.now(timezone.utc)
-    main_user.last_check_in = now - timedelta(days=8)
-    main_user.next_check_in_deadline = now - timedelta(days=1)
+    main_user.last_check_in = now - timedelta(days=15)
+    main_user.next_check_in_deadline = now - timedelta(days=8)
     main_user.missed_check_in_count = 0
     db.session.commit()
 
     assert compute_check_in_status(main_user) == 'ALERT'
 
-    assert evaluate_actual_user_check_in() >= 1
+    assert evaluate_actual_user_check_in() >= 2
 
     db.session.refresh(main_user)
     assert compute_check_in_status(main_user) == 'DEAD'
@@ -177,3 +207,69 @@ def test_poll_interval_rejects_non_positive():
             return {'check_in_poll_seconds': 0}
 
     assert poll_interval_seconds(_Settings()) == DEFAULT_POLL_SECONDS
+
+
+def test_start_skipped_in_reloader_parent(monkeypatch, client):
+    monkeypatch.setenv('WERKZEUG_RUN_MAIN', 'false')
+
+    result = start_check_in_scheduler(app)
+
+    assert result is None
+
+
+def test_start_acquires_leader_lock_and_runs(client, tmp_path, monkeypatch):
+    monkeypatch.delenv('WERKZEUG_RUN_MAIN', raising=False)
+    lock_file = tmp_path / 'scheduler.lock'
+
+    class _Settings:
+        def get(self, key, default=None):
+            if key == 'defences':
+                return {
+                    'check_in_poll_seconds': 3600,
+                    'check_in_scheduler_lock_file': str(lock_file),
+                }
+            return default
+
+    monkeypatch.setattr(
+        'src.tools.check_in_scheduler.Settings',
+        lambda: _Settings(),
+    )
+    monkeypatch.setattr(
+        'src.tools.check_in_scheduler.scheduler_lock_path',
+        lambda _settings: lock_file,
+    )
+    registrations = []
+    monkeypatch.setattr(
+        'src.tools.check_in_scheduler.atexit.register',
+        lambda fn: registrations.append(fn),
+    )
+
+    scheduler = start_check_in_scheduler(app)
+    assert scheduler is not None
+    assert scheduler.running
+    assert lock_file.is_file()
+    assert len(registrations) == 1
+    assert check_in_scheduler_module._atexit_registered is True
+
+    start_check_in_scheduler(app)
+    assert len(registrations) == 1
+
+    stop_check_in_scheduler()
+    assert not lock_file.is_file()
+
+
+def test_start_skipped_when_leader_lock_held(client, tmp_path, monkeypatch):
+    import os
+
+    monkeypatch.delenv('WERKZEUG_RUN_MAIN', raising=False)
+    lock_file = tmp_path / 'scheduler.lock'
+    lock_file.parent.mkdir(parents=True, exist_ok=True)
+    # Simulate another live process holding the lock (without this module's _lock_fd set).
+    lock_file.write_text(str(os.getpid()), encoding='utf-8')
+
+    monkeypatch.setattr(
+        'src.tools.check_in_scheduler.scheduler_lock_path',
+        lambda _settings: lock_file,
+    )
+
+    assert start_check_in_scheduler(app) is None

@@ -13,6 +13,7 @@
 - Several routes use a **JSON request body** even for `GET` (for example `/api/v1/checkin/status`, `/api/v1/utils/api`). Clients must send `Content-Type: application/json` with `id` and `token`. Some HTTP stacks omit GET bodies; use curl, Postman, or a client that supports GET with a body.
 - The **actual user** (owner) is stored as `is_actual_user=true` in the database. Documentation may refer to this user as "main"; only this user's check-ins clear `missed_check_in_count`.
 - Failed authentication increments `auth_fail_count` only. **`missed_check_in_count`** and `Status: DEAD` relate to missed check-ins, not bad tokens.
+- **Check-in timers**: A successful check-in stamps `last_check_in` and persists a frozen `next_check_in_deadline` (= `last_check_in` + interval period from config at check-in time). A background tracker (APScheduler) periodically raises `missed_check_in_count` from that deadline; the count is never lowered except by a successful actual-user check-in. Default `defences.miss_count` is **2** — status becomes `DEAD` when the counter reaches that threshold. Legacy rows without a stored deadline are backfilled on the first tracker tick.
 
 
 ---

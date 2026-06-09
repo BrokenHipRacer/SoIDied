@@ -8,8 +8,11 @@ can never walk it back if config or the clock changes. A successful check-in is 
 sole path that resets ``last_check_in``, re-freezes the deadline, and clears the count
 to 0 — which the next tick then honours.
 
-This closes the gap noted in AGENTS.md: ``compute_check_in_status`` could only return
-``ALERT`` from deadline math, but nothing advanced the counter toward ``DEAD``.
+Legacy rows with ``last_check_in`` but no persisted deadline are backfilled via
+``effective_deadline`` on the first evaluation tick.
+
+Only one process runs the tracker at a time: multi-worker deployments acquire an
+exclusive lock (``defences.check_in_scheduler_lock_file``) before starting APScheduler.
 """
 
 from __future__ import annotations
@@ -22,13 +25,19 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from src.db.extensions import db
 from src.tools.actual_user import get_actual_user
-from src.tools.check_in import check_in_period
+from src.tools.check_in import check_in_period, effective_deadline
+from src.tools.scheduler_leader import (
+    release_scheduler_leadership,
+    scheduler_lock_path,
+    try_acquire_scheduler_leadership,
+)
 from src.tools.settings import Settings
 
 DEFAULT_POLL_SECONDS = 60
 JOB_ID = 'check_in_tracker'
 
 _scheduler: BackgroundScheduler | None = None
+_atexit_registered = False
 
 
 def poll_interval_seconds(settings: Settings | None = None) -> int:
@@ -67,27 +76,36 @@ def compute_missed_count(
 
 
 def evaluate_actual_user_check_in(settings: Settings | None = None) -> int | None:
-    """Recompute the actual user's missed count from the frozen deadline (never-decreasing).
+    """Recompute the actual user's missed count from the effective deadline (never-decreasing).
 
-    The count only ever rises here: a successful check-in is the sole reset path. Returns
-    the resulting missed count, or ``None`` when there is no actual user or the user has
-    never checked in (status stays ``ALERT`` rather than advancing to ``DEAD``).
+    Uses ``effective_deadline`` so legacy rows with ``last_check_in`` but no frozen
+    deadline are evaluated and backfilled on first tick. The count only ever rises here;
+    a successful check-in is the sole reset path. Returns the resulting missed count, or
+    ``None`` when there is no actual user or the user has never checked in.
     Must be called inside a Flask application context.
     """
     settings = settings or Settings()
     user = get_actual_user()
-    if user is None or user.next_check_in_deadline is None:
+    if user is None:
         return None
 
+    deadline = effective_deadline(user, settings)
+    if deadline is None:
+        return None
+
+    dirty = False
+    if user.next_check_in_deadline is None:
+        user.next_check_in_deadline = deadline
+        dirty = True
+
     now = datetime.now(timezone.utc)
-    computed = compute_missed_count(
-        user.next_check_in_deadline,
-        now,
-        check_in_period(settings),
-    )
+    computed = compute_missed_count(deadline, now, check_in_period(settings))
     new_count = max(user.missed_check_in_count, computed)
     if new_count != user.missed_check_in_count:
         user.missed_check_in_count = new_count
+        dirty = True
+
+    if dirty:
         db.session.commit()
     return new_count
 
@@ -99,15 +117,18 @@ def _poll_job(app) -> None:
             evaluate_actual_user_check_in()
         except Exception as exc:  # noqa: BLE001 — a tracker tick must not kill the scheduler
             print(f'[scheduler] check-in evaluation failed: {exc}')
+        finally:
+            db.session.remove()
 
 
 def start_check_in_scheduler(app, settings: Settings | None = None) -> BackgroundScheduler | None:
     """Start the background tracker (idempotent). Returns the running scheduler.
 
     Skipped under the Werkzeug reloader's parent process so debug runs do not start two
-    schedulers.
+    schedulers. In multi-worker deployments, only the process that acquires the leader
+    lock starts the tracker.
     """
-    global _scheduler
+    global _scheduler, _atexit_registered
 
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'false':
         return None
@@ -115,11 +136,20 @@ def start_check_in_scheduler(app, settings: Settings | None = None) -> Backgroun
         return _scheduler
 
     settings = settings or Settings()
+    lock_path = scheduler_lock_path(settings)
+    if not try_acquire_scheduler_leadership(lock_path):
+        print(
+            f'[scheduler] check-in tracker not started — another worker holds '
+            f'{lock_path}'
+        )
+        return None
+
+    poll_seconds = poll_interval_seconds(settings)
     scheduler = BackgroundScheduler(daemon=True, timezone='UTC')
     scheduler.add_job(
         _poll_job,
         'interval',
-        seconds=poll_interval_seconds(settings),
+        seconds=poll_seconds,
         args=[app],
         id=JOB_ID,
         replace_existing=True,
@@ -127,13 +157,17 @@ def start_check_in_scheduler(app, settings: Settings | None = None) -> Backgroun
     )
     scheduler.start()
     _scheduler = scheduler
-    atexit.register(stop_check_in_scheduler)
+    if not _atexit_registered:
+        atexit.register(stop_check_in_scheduler)
+        _atexit_registered = True
+    print(f'[scheduler] check-in tracker started (poll every {poll_seconds}s, lock {lock_path})')
     return scheduler
 
 
 def stop_check_in_scheduler() -> None:
-    """Stop the tracker if running (used by tests and clean shutdown)."""
+    """Stop the tracker if running and release the leader lock."""
     global _scheduler
     if _scheduler is not None:
         _scheduler.shutdown(wait=False)
         _scheduler = None
+    release_scheduler_leadership()

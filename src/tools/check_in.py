@@ -77,7 +77,7 @@ def effective_deadline(user: User, settings: Settings | None = None) -> datetime
 def compute_check_in_status(user: User, settings: Settings | None = None) -> str:
     settings = settings or Settings()
     defences = _defences(settings)
-    miss_count = defences.get('miss_count', 1)
+    miss_count = defences.get('miss_count', 2)
 
     if user.missed_check_in_count >= miss_count:
         return 'DEAD'

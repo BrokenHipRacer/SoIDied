@@ -107,7 +107,8 @@ settings:
 defences:
   check_in_interval: d        # d=days, W=weeks, M=months, h=hours, m=minutes
   check_in_window: 7          # Grace period for check-ins
-  miss_count: 1               # Missed check-ins before death sequence
+  miss_count: 2               # Missed check-ins before death sequence (default 2)
+  check_in_poll_seconds: 60   # Background tracker poll interval (seconds)
   panic_mode: lockdown        # permanent, lockdown, alert, ignore
     # permanent: Complete lockdown, requires restart
     # lockdown: Locks down until API release
@@ -149,9 +150,12 @@ SoIDied/
 │   │   └── social_message.py
 │   ├── db/             # Database utilities
 │   └── tools/          # Core features
-│       └── settings.py # Configuration management
+│       ├── settings.py           # Configuration management
+│       ├── check_in.py           # Check-in period/deadline helpers
+│       ├── check_in_scheduler.py # Background missed check-in tracker
+│       └── scheduler_leader.py   # Multi-worker leader lock
 ├── test/               # Test suite
-└── database.db         # SQLite database
+└── instance/           # Runtime data (database.db, scheduler lock; gitignored)
 ```
 
 ## API Endpoints
@@ -212,7 +216,7 @@ See [LICENSE](LICENSE) file.
 - [x] Startup API file (`GET /api/v1/utils/api`)
 - [ ] Remaining API endpoint implementations (`src/api/*.py`)
 - [ ] Additional database models (`src/models/*.py`)
-- [ ] Check-in scheduler integration
+- [x] Check-in scheduler integration (APScheduler background tracker + multi-worker leader lock)
 - [ ] Email provider abstractions
 - [ ] Panic mode defense system
 - [ ] Death sequence actions
