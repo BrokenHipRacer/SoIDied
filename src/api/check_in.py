@@ -3,8 +3,8 @@ from flask_restful import Resource
 from src.api.auth import authenticate_credentials, load_json_payload
 from src.db.extensions import db
 from src.tools.check_in import (
-    compute_next_check_in_deadline,
     compute_check_in_status,
+    effective_deadline,
     format_next_check_in_message,
     record_compromised_check_in,
     record_successful_check_in,
@@ -21,15 +21,14 @@ class CheckIn(Resource):
 
         settings = Settings()
         if user.is_actual_user:
-            check_in_time = record_successful_check_in(user)
+            record_successful_check_in(user, settings)
         else:
-            check_in_time = record_compromised_check_in(user)
+            record_compromised_check_in(user, settings)
 
         db.session.commit()
-        deadline = compute_next_check_in_deadline(check_in_time, settings)
 
         return {
-            'message': format_next_check_in_message(deadline),
+            'message': format_next_check_in_message(effective_deadline(user, settings)),
         }, 200
 
 

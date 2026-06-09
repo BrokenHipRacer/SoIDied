@@ -13,6 +13,7 @@ class User(db.Model):
     access_token = db.Column(db.String(36), nullable=False)
     is_actual_user = db.Column(db.Boolean, nullable=False, default=False)
     last_check_in = db.Column(DateTime(timezone=True), nullable=True)
+    next_check_in_deadline = db.Column(DateTime(timezone=True), nullable=True)
     missed_check_in_count = db.Column(db.Integer, nullable=False, default=0)
     auth_fail_count = db.Column(db.Integer, nullable=False, default=0)
 
@@ -47,6 +48,11 @@ class User(db.Model):
             'id': self.id,
             'is_actual_user': self.is_actual_user,
             'last_check_in': self.last_check_in.isoformat() if self.last_check_in else None,
+            'next_check_in_deadline': (
+                self.next_check_in_deadline.isoformat()
+                if self.next_check_in_deadline
+                else None
+            ),
             'missed_check_in_count': self.missed_check_in_count,
             'auth_fail_count': self.auth_fail_count,
         }

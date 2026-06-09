@@ -54,6 +54,8 @@ def test_checkin_put_main_user_resets_missed_count(client, main_user):
     db.session.refresh(main_user)
     assert main_user.missed_check_in_count == 0
     assert main_user.last_check_in is not None
+    assert main_user.next_check_in_deadline is not None
+    assert main_user.next_check_in_deadline > main_user.last_check_in
 
 
 def test_checkin_put_non_main_user_does_not_reset_missed_count(client, non_main_user):
