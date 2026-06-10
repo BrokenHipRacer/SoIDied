@@ -78,6 +78,14 @@ gunicorn -w 4 -b 127.0.0.1:5000 api:app
 
 Only one of the four workers runs the check-in tracker. The lock file lives under `instance/` (gitignored alongside `database.db`). If the leader dies without releasing the lock, the next startup removes a stale lock when the recorded PID is no longer running.
 
+#### Known limitations
+
+- **Single host only.** The leader lock is a file on the local filesystem (`instance/check_in_scheduler.lock`). It coordinates workers on **one machine** (for example four gunicorn processes on the same VM). It does **not** elect a leader across multiple hosts; if you run SoIDied on several servers, each host could start its own tracker unless you add a shared lock backend (not implemented yet).
+- **Stale lock recovery is PID-based.** On startup, a lock file whose recorded PID is no longer running is treated as stale and removed. If the lock file is corrupted or points at an unrelated live process, acquisition may fail until an operator deletes the lock file manually (see Troubleshooting).
+- **Leader crash on Windows.** If the leader worker is killed hard (no `atexit` / graceful shutdown), the lock file may remain until the next process start runs stale-PID cleanup. This is usually automatic; delete `instance/check_in_scheduler.lock` only if a new leader cannot start.
+- **No separate scheduler service.** Do not run a dedicated “scheduler only” process alongside gunicorn workers on the same host — that would compete for the same lock or, if misconfigured, risk duplicate trackers. Let bootstrap pick one worker as leader.
+- **Poll cadence is per leader process.** Only the worker holding the lock polls the database. If that worker dies and another becomes leader, tracking resumes on the next poll tick (`defences.check_in_poll_seconds`); there is no catch-up burst for missed ticks.
+
 Configure paths in `config.yaml`:
 
 ```yaml
