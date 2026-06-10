@@ -64,6 +64,27 @@ Starting the application with `run.sh` and Flask **bootstrap**:
    - `startup/actual_user.md` — credentials only
    - `startup/api.txt` — credentials plus documented API routes (served by `GET /api/v1/utils/api`)
    - `startup/.soidied_master_key` — local master encryption key created by `run.sh`
+5. Bootstrap starts the background **check-in tracker** (APScheduler). It polls every `defences.check_in_poll_seconds` (default 60s) and advances the actual user's `missed_check_in_count` once the effective deadline passes (`next_check_in_deadline`, backfilled from `last_check_in` when missing), so `GET /api/v1/checkin/status` can reach `DEAD` after `defences.miss_count` (default 2) missed periods. A successful check-in re-freezes the deadline and resets the count; the tracker never lowers it. The tracker is skipped under tests (`SOIDIED_SKIP_BOOTSTRAP=1`).
+
+### Multi-worker production (gunicorn)
+
+Run multiple API workers as usual; **do not** start a separate scheduler process. Bootstrap attempts to acquire `defences.check_in_scheduler_lock_file` (default `instance/check_in_scheduler.lock`). The worker that wins the lock starts APScheduler; others log that the tracker is skipped and continue serving HTTP.
+
+Example:
+
+```bash
+gunicorn -w 4 -b 127.0.0.1:5000 api:app
+```
+
+Only one of the four workers runs the check-in tracker. The lock file lives under `instance/` (gitignored alongside `database.db`). If the leader dies without releasing the lock, the next startup removes a stale lock when the recorded PID is no longer running.
+
+#### Known limitations
+
+- **Single host only.** The leader lock is a file on the local filesystem (`instance/check_in_scheduler.lock`). It coordinates workers on **one machine** (for example four gunicorn processes on the same VM). It does **not** elect a leader across multiple hosts; if you run SoIDied on several servers, each host could start its own tracker unless you add a shared lock backend (not implemented yet).
+- **Stale lock recovery is PID-based.** On startup, a lock file whose recorded PID is no longer running is treated as stale and removed. If the lock file is corrupted or points at an unrelated live process, acquisition may fail until an operator deletes the lock file manually (see Troubleshooting).
+- **Leader crash on Windows.** If the leader worker is killed hard (no `atexit` / graceful shutdown), the lock file may remain until the next process start runs stale-PID cleanup. This is usually automatic; delete `instance/check_in_scheduler.lock` only if a new leader cannot start.
+- **No separate scheduler service.** Do not run a dedicated “scheduler only” process alongside gunicorn workers on the same host — that would compete for the same lock or, if misconfigured, risk duplicate trackers. Let bootstrap pick one worker as leader.
+- **Poll cadence is per leader process.** Only the worker holding the lock polls the database. If that worker dies and another becomes leader, tracking resumes on the next poll tick (`defences.check_in_poll_seconds`); there is no catch-up burst for missed ticks.
 
 Configure paths in `config.yaml`:
 
@@ -259,6 +280,7 @@ Important operational notes:
 | All API routes return 404 | `dark_mode: true` in config | Set `dark_mode: false` for local testing |
 | `no such table: users` | Old or missing database | Delete `database.db`; restart `python api.py` |
 | Check-in returns 401 | Wrong `id`/`token` | Read `startup/actual_user.md` after bootstrap |
+| Check-in tracker not running (multi-worker) | Another worker holds the lock | Expected: only one worker logs `[scheduler] check-in tracker started`; others skip. Delete stale `instance/check_in_scheduler.lock` if the leader crashed |
 | Port 5000 in use | Another process on 5000 | Stop the other process or change port in `api.py` |
 
 ---

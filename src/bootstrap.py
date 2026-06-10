@@ -37,6 +37,16 @@ def _provision_tls_quietly() -> None:
         print(f'[TLS] certificate provisioning skipped: {exc}')
 
 
+def _start_check_in_tracker(app: Flask) -> None:
+    """Launch the background check-in time tracker; never block bootstrap on failure."""
+    try:
+        from src.tools.check_in_scheduler import start_check_in_scheduler
+
+        start_check_in_scheduler(app)
+    except Exception as exc:  # noqa: BLE001 — scheduler startup must not crash bootstrap
+        print(f'[scheduler] check-in tracker not started: {exc}')
+
+
 def bootstrap_app(app: Flask) -> None:
     """Create schema, ensure actual user exists, and write startup files."""
     if app.config.get('TESTING') or not should_bootstrap():
@@ -51,6 +61,7 @@ def bootstrap_app(app: Flask) -> None:
             user = initialize_actual_user()
             _print_actual_user_credentials(user)
         _provision_tls_quietly()
+        _start_check_in_tracker(app)
     finally:
         if previous is None:
             os.environ.pop(INTERNAL_ENV, None)

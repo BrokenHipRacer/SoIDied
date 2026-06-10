@@ -7,3 +7,4 @@ Note of things to do
 6. Discord integration
 7. Facebook integration
 8. Adopt `ruff format` across the codebase (currently lint-only; formatter would reformat ~31 files, mostly quote style)
+9. Wire death-sequence actions when `Status: DEAD` is reached (tracker advances counter; `actions.*` not fired yet)

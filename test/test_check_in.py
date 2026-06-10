@@ -54,6 +54,17 @@ def test_checkin_put_main_user_resets_missed_count(client, main_user):
     db.session.refresh(main_user)
     assert main_user.missed_check_in_count == 0
     assert main_user.last_check_in is not None
+    assert main_user.next_check_in_deadline is not None
+    assert main_user.next_check_in_deadline > main_user.last_check_in
+
+
+def test_checkin_put_message_matches_stored_deadline(client, main_user):
+    response = client.put(CHECKIN_URL, json=_auth_body(main_user))
+
+    assert response.status_code == 200
+    db.session.refresh(main_user)
+    assert main_user.next_check_in_deadline is not None
+    assert main_user.next_check_in_deadline.isoformat() in response.get_json()['message']
 
 
 def test_checkin_put_non_main_user_does_not_reset_missed_count(client, non_main_user):
@@ -108,7 +119,7 @@ def test_checkin_status_ok(client, main_user):
 
 
 def test_checkin_status_dead_when_missed_count_reaches_miss_count(client, main_user):
-    main_user.missed_check_in_count = 1
+    main_user.missed_check_in_count = 2
     db.session.commit()
 
     response = client.get(CHECKIN_STATUS_URL, json=_auth_body(main_user))
