@@ -18,5 +18,5 @@ PyYAML==6.0.3
 ruff==0.15.16
 six==1.17.0
 SQLAlchemy==2.0.46
-typing_extensions==4.15.0
+typing_extensions==4.16.0
 Werkzeug==3.1.6
